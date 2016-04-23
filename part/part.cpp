@@ -23,6 +23,7 @@
 
 #include "part.h"
 #include "ark_debug.h"
+#include "adddialog.h"
 #include "archivemodel.h"
 #include "archiveview.h"
 #include "arkviewer.h"
@@ -1131,9 +1132,12 @@ void Part::slotAddFiles()
     //          When KFileDialog::exec() is called, the widget is already shown
     //          and nothing happens.
 
-    const QStringList filesToAdd = QFileDialog::getOpenFileNames(widget(), i18nc("@title:window", "Add Files"));
+    QPointer<AddDialog> dlg = new AddDialog(widget(), i18nc("@title:window", "Add Files"), QUrl::fromLocalFile(QDir::homePath()), m_model->archive()->mimeType());
 
-    slotAddFiles(filesToAdd);
+    if (dlg->exec() == QDialog::Accepted) {
+        qCDebug(ARK) << "Selected files:" << dlg->selectedFiles();
+        slotAddFiles(dlg->selectedFiles());
+    }
 }
 
 void Part::slotAddDir()
