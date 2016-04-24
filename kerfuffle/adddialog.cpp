@@ -52,7 +52,6 @@ AddDialog::AddDialog(QWidget *parent,
     setWindowTitle(title);
 
     QVBoxLayout *vlayout = new QVBoxLayout(this);
-    setLayout(vlayout);
 
     m_fileWidget = new KFileWidget(startDir, this);
     vlayout->addWidget(m_fileWidget);
@@ -91,9 +90,8 @@ void AddDialog::slotOpenOptions(bool checked)
     Q_UNUSED(checked);
 
     QPointer<QDialog> dlg = new QDialog(this);
-    QVBoxLayout *vlayout = new QVBoxLayout();
+    QVBoxLayout *vlayout = new QVBoxLayout(dlg);
     dlg->setWindowTitle(i18n("Advanced Options"));
-    dlg->setLayout(vlayout);
 
     CompressionOptionsWidget *optionsWidget = new CompressionOptionsWidget(m_mimeType, dlg);
     vlayout->addWidget(optionsWidget);

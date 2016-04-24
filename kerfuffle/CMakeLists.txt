@@ -29,7 +29,7 @@ ki18n_wrap_ui(kerfuffle_SRCS
     extractionsettings.ui
     previewsettings.ui
     propertiesdialog.ui
-    compressionoptions.ui
+    compressionoptionswidget.ui
 )
 
 ecm_qt_declare_logging_category(kerfuffle_SRCS

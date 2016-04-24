@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>CompressionOptions</class>
- <widget class="QWidget" name="CompressionOptions">
+ <class>CompressionOptionsWidget</class>
+ <widget class="QWidget" name="CompressionOptionsWidget">
   <property name="geometry">
    <rect>
     <x>0</x>

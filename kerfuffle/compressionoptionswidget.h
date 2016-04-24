@@ -29,7 +29,7 @@
 #define COMPRESSIONOPTIONSWIDGET_H
 
 #include "kerfuffle_export.h"
-#include "ui_compressionoptions.h"
+#include "ui_compressionoptionswidget.h"
 
 #include <QWidget>
 
@@ -37,15 +37,12 @@ class QMimeType;
 
 namespace Kerfuffle
 {
-class KERFUFFLE_EXPORT CompressionOptionsWidget : public QWidget, public Ui::CompressionOptions
+class KERFUFFLE_EXPORT CompressionOptionsWidget : public QWidget, public Ui::CompressionOptionsWidget
 {
     Q_OBJECT
 
 public:
     explicit CompressionOptionsWidget(const QMimeType &mimeType, QWidget *parent = 0);
-
-private:
-    class Ui::CompressionOptions *m_ui;
 };
 }
 

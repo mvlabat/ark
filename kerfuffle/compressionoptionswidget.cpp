@@ -35,40 +35,31 @@
 
 namespace Kerfuffle
 {
-class CompressionOptionsUI: public QWidget, public Ui::CompressionOptions
-{
-public:
-    CompressionOptionsUI(QWidget *parent = 0)
-            : QWidget(parent) {
-        setupUi(this);
-    }
-};
-
 CompressionOptionsWidget::CompressionOptionsWidget(const QMimeType &mimeType, QWidget *parent)
     : QWidget(parent)
 {
-    m_ui = new CompressionOptionsUI(this);
+    setupUi(this);
 
     const KPluginMetaData metadata = preferredPluginFor(mimeType, Kerfuffle::supportedWritePlugins());
     const ArchiveFormat archiveFormat = ArchiveFormat::fromMetadata(mimeType, metadata);
     Q_ASSERT(archiveFormat.isValid());
 
     if (archiveFormat.encryptionType() != Archive::Unencrypted) {
-        m_ui->collapsibleEncryption->setEnabled(true);
-        m_ui->collapsibleEncryption->setToolTip(QString());
+        collapsibleEncryption->setEnabled(true);
+        collapsibleEncryption->setToolTip(QString());
     } else {
-        m_ui->collapsibleEncryption->setEnabled(false);
-        m_ui->collapsibleEncryption->setToolTip(i18n("Protection of the archive with password is not possible with the %1 format.",
+        collapsibleEncryption->setEnabled(false);
+        collapsibleEncryption->setToolTip(i18n("Protection of the archive with password is not possible with the %1 format.",
                                                 mimeType.comment()));
     }
 
     if (archiveFormat.maxCompressionLevel() == 0) {
-        m_ui->collapsibleCompression->setEnabled(false);
+        collapsibleCompression->setEnabled(false);
     } else {
-        m_ui->collapsibleCompression->setEnabled(true);
-        m_ui->compLevelSlider->setMinimum(archiveFormat.minCompressionLevel());
-        m_ui->compLevelSlider->setMaximum(archiveFormat.maxCompressionLevel());
-        m_ui->compLevelSlider->setValue(archiveFormat.defaultCompressionLevel());
+        collapsibleCompression->setEnabled(true);
+        compLevelSlider->setMinimum(archiveFormat.minCompressionLevel());
+        compLevelSlider->setMaximum(archiveFormat.maxCompressionLevel());
+        compLevelSlider->setValue(archiveFormat.defaultCompressionLevel());
     }
 }
 }
