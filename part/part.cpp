@@ -1098,16 +1098,13 @@ void Part::slotAddFiles(const QStringList& filesToAdd, const QString& path)
         globalWorkDir.chop(1);
     }
 
+    CompressionOptions options(m_model->archive()->compressionOptions());
+
     // Now take the absolute path of the parent directory.
     globalWorkDir = QFileInfo(globalWorkDir).dir().absolutePath();
 
     qCDebug(ARK) << "Detected GlobalWorkDir to be " << globalWorkDir;
-    CompressionOptions options;
     options[QStringLiteral("GlobalWorkDir")] = globalWorkDir;
-
-    if (arguments().metaData().contains(QStringLiteral("compressionLevel"))) {
-        options[QStringLiteral("CompressionLevel")] = arguments().metaData()[QStringLiteral("compressionLevel")];
-    }
 
     AddJob *job = m_model->addFiles(cleanFilesToAdd, options);
     if (!job) {
@@ -1122,6 +1119,19 @@ void Part::slotAddFiles(const QStringList& filesToAdd, const QString& path)
 
 void Part::slotAddFiles()
 {
+    // If compression options are already set, we dont use the values from CreateDialog.
+    CompressionOptions opts;
+    if (m_model->archive()->compressionOptions().isEmpty()) {
+        if (arguments().metaData().contains(QStringLiteral("compressionLevel"))) {
+            opts[QStringLiteral("CompressionLevel")] = arguments().metaData()[QStringLiteral("compressionLevel")];
+        }
+        m_model->archive()->setCompressionOptions(opts);
+    } else {
+        opts = m_model->archive()->compressionOptions();
+    }
+
+    qCDebug(ARK) << "Opening AddDialog with opts:" << opts;
+
     // #264819: passing widget() as the parent will not work as expected.
     //          KFileDialog will create a KFileWidget, which runs an internal
     //          event loop to stat the given directory. This, in turn, leads to
@@ -1132,12 +1142,19 @@ void Part::slotAddFiles()
     //          When KFileDialog::exec() is called, the widget is already shown
     //          and nothing happens.
 
-    QPointer<AddDialog> dlg = new AddDialog(widget(), i18nc("@title:window", "Add Files"), QUrl::fromLocalFile(QDir::homePath()), m_model->archive()->mimeType());
+    QPointer<AddDialog> dlg = new AddDialog(widget(),
+                                            i18nc("@title:window", "Add Files"),
+                                            QUrl::fromLocalFile(QDir::homePath()),
+                                            m_model->archive()->mimeType(),
+                                            opts);
 
     if (dlg->exec() == QDialog::Accepted) {
         qCDebug(ARK) << "Selected files:" << dlg->selectedFiles();
-        slotAddFiles(dlg->selectedFiles());
+        qCDebug(ARK) << "Options:" << dlg->compressionOptions();
+        m_model->archive()->setCompressionOptions(dlg->compressionOptions());
+        slotAddFiles(dlg->selectedFiles(), QString());
     }
+    delete dlg;
 }
 
 void Part::slotAddDir()

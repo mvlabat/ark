@@ -43,11 +43,13 @@ namespace Kerfuffle
 AddDialog::AddDialog(QWidget *parent,
                      const QString &title,
                      const QUrl &startDir,
-                     const QMimeType &mimeType)
-        : QDialog(parent, Qt::Dialog),
-          m_mimeType(mimeType)
+                     const QMimeType &mimeType,
+                     const CompressionOptions &opts)
+        : QDialog(parent, Qt::Dialog)
+        , m_mimeType(mimeType)
+        , m_compOptions(opts)
 {
-    qCDebug(ARK) << "AddDialog loaded";
+    qCDebug(ARK) << "AddDialog loaded with opts:" << m_compOptions;
 
     setWindowTitle(title);
 
@@ -58,7 +60,6 @@ AddDialog::AddDialog(QWidget *parent,
 
     QPushButton *optionsButton = new QPushButton(i18n("Advanced Options"));
     optionsButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    //vlayout->addWidget(optionsButton);
     m_fileWidget->setCustomWidget(optionsButton);
 
     connect(optionsButton, &QPushButton::clicked, this, &AddDialog::slotOpenOptions);
@@ -85,6 +86,11 @@ QStringList AddDialog::selectedFiles() const
     return m_fileWidget->selectedFiles();
 }
 
+CompressionOptions AddDialog::compressionOptions() const
+{
+    return m_compOptions;
+}
+
 void AddDialog::slotOpenOptions(bool checked)
 {
     Q_UNUSED(checked);
@@ -93,7 +99,9 @@ void AddDialog::slotOpenOptions(bool checked)
     QVBoxLayout *vlayout = new QVBoxLayout(dlg);
     dlg->setWindowTitle(i18n("Advanced Options"));
 
-    CompressionOptionsWidget *optionsWidget = new CompressionOptionsWidget(m_mimeType, dlg);
+    optionsWidget = new CompressionOptionsWidget(m_mimeType, m_compOptions, dlg);
+    optionsWidget->setMinimumWidth(300);
+    optionsWidget->setEncryptionVisible(false);
     vlayout->addWidget(optionsWidget);
 
     QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dlg);
@@ -104,8 +112,10 @@ void AddDialog::slotOpenOptions(bool checked)
     dlg->layout()->setSizeConstraint(QLayout::SetFixedSize);
 
     if (dlg->exec() == QDialog::Accepted) {
-        qCDebug(ARK) << "accepted";
+        m_compOptions = optionsWidget->commpressionOptions();
+        qCDebug(ARK) << "accepted with options:" << m_compOptions;
     }
+    delete dlg;
 }
 
 }

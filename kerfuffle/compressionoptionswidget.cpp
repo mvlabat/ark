@@ -26,19 +26,30 @@
  */
 
 #include "compressionoptionswidget.h"
+#include "ark_debug.h"
 #include "archiveformat.h"
 #include "mimetypes.h"
 
+#include <KColorScheme>
 #include <KPluginMetaData>
 
 #include <QMimeDatabase>
 
 namespace Kerfuffle
 {
-CompressionOptionsWidget::CompressionOptionsWidget(const QMimeType &mimeType, QWidget *parent)
+CompressionOptionsWidget::CompressionOptionsWidget(const QMimeType &mimeType,
+                                                   const CompressionOptions &opts,
+                                                   QWidget *parent)
     : QWidget(parent)
+    , m_mimetype(mimeType)
 {
     setupUi(this);
+
+    qCDebug(ARK) << "opts:" << opts;
+
+    KColorScheme colorScheme(QPalette::Active, KColorScheme::View);
+    pwdWidget->setBackgroundWarningColor(colorScheme.background(KColorScheme::NegativeBackground).color());
+    pwdWidget->setPasswordStrengthMeterVisible(false);
 
     const KPluginMetaData metadata = preferredPluginFor(mimeType, Kerfuffle::supportedWritePlugins());
     const ArchiveFormat archiveFormat = ArchiveFormat::fromMetadata(mimeType, metadata);
@@ -50,7 +61,7 @@ CompressionOptionsWidget::CompressionOptionsWidget(const QMimeType &mimeType, QW
     } else {
         collapsibleEncryption->setEnabled(false);
         collapsibleEncryption->setToolTip(i18n("Protection of the archive with password is not possible with the %1 format.",
-                                                mimeType.comment()));
+                                               mimeType.comment()));
     }
 
     if (archiveFormat.maxCompressionLevel() == 0) {
@@ -59,8 +70,64 @@ CompressionOptionsWidget::CompressionOptionsWidget(const QMimeType &mimeType, QW
         collapsibleCompression->setEnabled(true);
         compLevelSlider->setMinimum(archiveFormat.minCompressionLevel());
         compLevelSlider->setMaximum(archiveFormat.maxCompressionLevel());
+    }
+
+    if (opts.contains(QStringLiteral("CompressionLevel"))) {
+        compLevelSlider->setValue(opts.value(QStringLiteral("CompressionLevel")).toInt());
+    } else {
         compLevelSlider->setValue(archiveFormat.defaultCompressionLevel());
     }
-}
+
+    connect(collapsibleEncryption, &KCollapsibleGroupBox::expandedChanged, this, &CompressionOptionsWidget::slotEncryptionToggled);
+
+    slotEncryptionToggled();
 }
 
+CompressionOptions CompressionOptionsWidget::commpressionOptions() const
+{
+    CompressionOptions opts;
+    opts[QStringLiteral("CompressionLevel")] = compLevelSlider->value();
+
+    return opts;
+}
+
+int CompressionOptionsWidget::compressionLevel() const
+{
+    return compLevelSlider->value();
+}
+
+void CompressionOptionsWidget::setEncryptionVisible(bool visible)
+{
+    collapsibleEncryption->setVisible(visible);
+}
+
+QString CompressionOptionsWidget::password() const
+{
+    return pwdWidget->password();
+}
+
+void CompressionOptionsWidget::slotEncryptionToggled()
+{
+    const KPluginMetaData metadata = preferredPluginFor(m_mimetype, supportedWritePlugins());
+    const ArchiveFormat archiveFormat = ArchiveFormat::fromMetadata(m_mimetype, metadata);
+    Q_ASSERT(archiveFormat.isValid());
+
+    const bool isExpanded = collapsibleEncryption->isExpanded();
+    if (isExpanded && (archiveFormat.encryptionType() == Archive::HeaderEncrypted)) {
+        encryptHeaderCheckBox->setEnabled(true);
+        encryptHeaderCheckBox->setToolTip(QString());
+    } else {
+        encryptHeaderCheckBox->setEnabled(false);
+        // Show the tooltip only if the encryption is still enabled.
+        // This is needed because if the new filter is e.g. tar, the whole encryption group gets disabled.
+        if (collapsibleEncryption->isEnabled() && collapsibleEncryption->isExpanded()) {
+            encryptHeaderCheckBox->setToolTip(i18n("Protection of the list of files is not possible with the %1 format.",
+                                                   m_mimetype.comment()));
+        } else {
+            encryptHeaderCheckBox->setToolTip(QString());
+        }
+    }
+    pwdWidget->setEnabled(isExpanded);
+}
+
+}

@@ -29,6 +29,8 @@
 #define ADDDIALOG_H
 
 #include "kerfuffle_export.h"
+#include "archive_kerfuffle.h"
+#include "compressionoptionswidget.h"
 
 #include <KFileWidget>
 
@@ -46,13 +48,17 @@ public:
     explicit AddDialog(QWidget *parent,
                        const QString &title,
                        const QUrl &startDir,
-                       const QMimeType &mimeType);
+                       const QMimeType &mimeType,
+                       const CompressionOptions &opts = QHash<QString, QVariant>());
     virtual ~AddDialog();
     QStringList selectedFiles() const;
+    CompressionOptions compressionOptions() const;
 
 private:
     KFileWidget *m_fileWidget;
     QMimeType m_mimeType;
+    CompressionOptionsWidget *optionsWidget;
+    CompressionOptions m_compOptions;
 
 private slots:
     void slotOpenOptions(bool checked);

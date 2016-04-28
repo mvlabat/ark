@@ -29,11 +29,11 @@
 #define COMPRESSIONOPTIONSWIDGET_H
 
 #include "kerfuffle_export.h"
+#include "archive_kerfuffle.h"
 #include "ui_compressionoptionswidget.h"
 
+#include <QMimeType>
 #include <QWidget>
-
-class QMimeType;
 
 namespace Kerfuffle
 {
@@ -42,7 +42,19 @@ class KERFUFFLE_EXPORT CompressionOptionsWidget : public QWidget, public Ui::Com
     Q_OBJECT
 
 public:
-    explicit CompressionOptionsWidget(const QMimeType &mimeType, QWidget *parent = 0);
+    explicit CompressionOptionsWidget(const QMimeType &mimeType,
+                                      const CompressionOptions &opts = QHash<QString, QVariant>(),
+                                      QWidget *parent = 0);
+    void setEncryptionVisible(bool visible);
+    int compressionLevel() const;
+    QString password() const;
+    CompressionOptions commpressionOptions() const;
+
+private:
+    QMimeType m_mimetype;
+
+private slots:
+    void slotEncryptionToggled();
 };
 }
 
