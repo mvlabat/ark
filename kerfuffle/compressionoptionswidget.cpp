@@ -28,7 +28,7 @@
 #include "compressionoptionswidget.h"
 #include "ark_debug.h"
 #include "archiveformat.h"
-#include "mimetypes.h"
+#include "pluginmanager.h"
 
 #include <KColorScheme>
 #include <KPluginMetaData>
@@ -51,7 +51,7 @@ CompressionOptionsWidget::CompressionOptionsWidget(const QMimeType &mimeType,
     pwdWidget->setBackgroundWarningColor(colorScheme.background(KColorScheme::NegativeBackground).color());
     pwdWidget->setPasswordStrengthMeterVisible(false);
 
-    const KPluginMetaData metadata = preferredPluginFor(mimeType, Kerfuffle::supportedWritePlugins());
+    const KPluginMetaData metadata = PluginManager().preferredPluginFor(mimeType)->metaData();
     const ArchiveFormat archiveFormat = ArchiveFormat::fromMetadata(mimeType, metadata);
     Q_ASSERT(archiveFormat.isValid());
 
@@ -108,7 +108,7 @@ QString CompressionOptionsWidget::password() const
 
 void CompressionOptionsWidget::slotEncryptionToggled()
 {
-    const KPluginMetaData metadata = preferredPluginFor(m_mimetype, supportedWritePlugins());
+    const KPluginMetaData metadata = PluginManager().preferredPluginFor(m_mimetype)->metaData();
     const ArchiveFormat archiveFormat = ArchiveFormat::fromMetadata(m_mimetype, metadata);
     Q_ASSERT(archiveFormat.isValid());
 
