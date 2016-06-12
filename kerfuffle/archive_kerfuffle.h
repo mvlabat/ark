@@ -45,7 +45,12 @@ class ListJob;
 class ExtractJob;
 class DeleteJob;
 class AddJob;
+class CommentJob;
+class TestJob;
+class OpenJob;
+class OpenWithJob;
 class Plugin;
+class PreviewJob;
 class Query;
 class ReadOnlyArchiveInterface;
 
@@ -164,7 +169,7 @@ public:
     QString completeBaseName() const;
     QString fileName() const;
     QString comment() const;
-    QMimeType mimeType() const;
+    QMimeType mimeType();
     bool isReadOnly() const;
     bool isSingleFolderArchive();
     bool hasComment() const;
@@ -200,6 +205,8 @@ public:
     ListJob* list();
 
     DeleteJob* deleteFiles(const QList<QVariant> & files);
+    CommentJob* addComment(const QString &comment);
+    TestJob* testArchive();
 
     /**
      * Compression options that should be handled by all interfaces:
@@ -216,6 +223,10 @@ public:
     AddJob* addFiles(const QStringList & files, const CompressionOptions& options = CompressionOptions());
 
     ExtractJob* copyFiles(const QList<QVariant> &files, const QString &destinationDir, const ExtractionOptions &options = ExtractionOptions());
+
+    PreviewJob* preview(const QString &file);
+    OpenJob* open(const QString &file);
+    OpenWithJob* openWith(const QString &file);
 
     /**
      * @param password The password to encrypt the archive with.
@@ -245,6 +256,7 @@ private:
     EncryptionType m_encryptionType;
     qulonglong m_numberOfFiles;
     CompressionOptions m_compOptions;
+    QMimeType m_mimeType;
 };
 
 } // namespace Kerfuffle

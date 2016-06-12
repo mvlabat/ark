@@ -75,13 +75,13 @@ public:
     /**
      * List archive contents.
      * This runs the process of reading archive contents.
-     * When subclassing, you can block as long as you need, the function runs
-     * in its own thread.
+     * When subclassing, you can block as long as you need (unless you called setWaitForFinishedSignal(true)).
      * @returns whether the listing succeeded.
      * @note If returning false, make sure to emit the error() signal beforewards to notify
      * the user of the error condition.
      */
     virtual bool list() = 0;
+    virtual bool testArchive() = 0;
     void setPassword(const QString &password);
     void setHeaderEncryptionEnabled(bool enabled);
 
@@ -90,8 +90,7 @@ public:
      * Globally recognized extraction options:
      * @li PreservePaths - preserve file paths (extract flat if false)
      * @li RootNode - node in the archive which will correspond to the @arg destinationDirectory
-     * When subclassing, you can block as long as you need, the function runs
-     * in its own thread.
+     * When subclassing, you can block as long as you need (unless you called setWaitForFinishedSignal(true)).
      * @returns whether the listing succeeded.
      * @note If returning false, make sure to emit the error() signal beforewards to notify
      * the user of the error condition.
@@ -102,8 +101,6 @@ public:
     virtual bool doKill();
     virtual bool doSuspend();
     virtual bool doResume();
-
-    virtual bool isCliBased() const;
 
     bool isHeaderEncryptionEnabled() const;
 
@@ -116,14 +113,13 @@ signals:
     void info(const QString &info);
     void finished(bool result);
     void userQuery(Query *query);
+    void testSuccess();
 
 protected:
 
     /**
-     * Setting this option to true will not exit the thread with the
-     * exit of the various functions, but rather when finished(bool) is
-     * called. Doing this one can use the event loop easily while doing
-     * the operation.
+     * Setting this option to true will not run the functions in their own thread.
+     * Instead it will be necessary to call finished(bool) when the operation is actually finished.
      */
     void setWaitForFinishedSignal(bool value);
 
@@ -152,6 +148,7 @@ public:
     //contain
     virtual bool addFiles(const QStringList & files, const CompressionOptions& options) = 0;
     virtual bool deleteFiles(const QList<QVariant> & files) = 0;
+    virtual bool addComment(const QString &comment) = 0;
 };
 
 } // namespace Kerfuffle

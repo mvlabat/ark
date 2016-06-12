@@ -224,15 +224,20 @@ void MainWindow::openArchive()
     Q_UNUSED(iface);
 
     Kerfuffle::PluginManager pluginManager;
-    QPointer<QFileDialog> dlg = new QFileDialog(this, i18nc("to open an archive", "Open Archive"));
-    dlg->setMimeTypeFilters(pluginManager.supportedMimeTypes());
+    auto dlg = new QFileDialog(this, i18nc("to open an archive", "Open Archive"));
 
+    dlg->setMimeTypeFilters(pluginManager.supportedMimeTypes());
     dlg->setFileMode(QFileDialog::ExistingFile);
     dlg->setAcceptMode(QFileDialog::AcceptOpen);
-    if (dlg->exec() == QDialog::Accepted) {
-        openUrl(dlg->selectedUrls().first());
-    }
-    delete dlg;
+
+    connect(dlg, &QDialog::finished, this, [this, dlg](int result) {
+        if (result == QDialog::Accepted) {
+            openUrl(dlg->selectedUrls().first());
+        }
+        dlg->deleteLater();
+    });
+
+    dlg->open();
 }
 
 void MainWindow::openUrl(const QUrl& url)
@@ -314,11 +319,13 @@ void MainWindow::newArchive()
     if (dialog.data()->exec()) {
         const QUrl saveFileUrl = dialog.data()->selectedUrl();
         const QString password = dialog.data()->password();
+        const QString fixedMimeType = dialog.data()->currentMimeType().name();
 
         qCDebug(ARK) << "CreateDialog returned URL:" << saveFileUrl.toString();
-        qCDebug(ARK) << "CreateDialog returned mime:" << dialog.data()->currentMimeType().name();
+        qCDebug(ARK) << "CreateDialog returned mime:" << fixedMimeType;
 
         m_openArgs.metaData()[QStringLiteral("createNewArchive")] = QStringLiteral("true");
+        m_openArgs.metaData()[QStringLiteral("fixedMimeType")] = fixedMimeType;
         if (dialog.data()->compressionLevel() > -1) {
             m_openArgs.metaData()[QStringLiteral("compressionLevel")] = QString::number(dialog.data()->compressionLevel());
         }
@@ -332,6 +339,7 @@ void MainWindow::newArchive()
 
         m_openArgs.metaData().remove(QStringLiteral("showExtractDialog"));
         m_openArgs.metaData().remove(QStringLiteral("createNewArchive"));
+        m_openArgs.metaData().remove(QStringLiteral("fixedMimeType"));
         m_openArgs.metaData().remove(QStringLiteral("compressionLevel"));
         m_openArgs.metaData().remove(QStringLiteral("encryptionPassword"));
         m_openArgs.metaData().remove(QStringLiteral("encryptHeader"));

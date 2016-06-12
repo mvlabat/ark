@@ -41,7 +41,9 @@ public:
                            Kerfuffle::Archive::EncryptionType encryptionType,
                            int minCompLevel,
                            int maxCompLevel,
-                           int defaultCompLevel);
+                           int defaultCompLevel,
+                           bool supportsWriteComment,
+                           bool supportsTesting);
 
     /**
      * @return The archive format of the given @p mimeType, according to the given @p metadata.
@@ -61,6 +63,8 @@ public:
     int minCompressionLevel() const;
     int maxCompressionLevel() const;
     int defaultCompressionLevel() const;
+    bool supportsWriteComment() const;
+    bool supportsTesting() const;
 
 private:
     QMimeType m_mimeType;
@@ -68,6 +72,8 @@ private:
     int m_minCompressionLevel;
     int m_maxCompressionLevel;
     int m_defaultCompressionLevel;
+    bool m_supportsWriteComment;
+    bool m_supportsTesting;
 };
 
 }

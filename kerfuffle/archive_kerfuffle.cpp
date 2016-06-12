@@ -169,9 +169,41 @@ QString Archive::comment() const
     return isValid() ? m_iface->comment() : QString();
 }
 
-QMimeType Archive::mimeType() const
+CommentJob* Archive::addComment(const QString &comment)
 {
-    return isValid() ? determineMimeType(fileName()) : QMimeType();
+    if (!isValid()) {
+        return Q_NULLPTR;
+    }
+
+    qCDebug(ARK) << "Going to add comment:" << comment;
+    Q_ASSERT(!isReadOnly());
+    CommentJob *job = new CommentJob(comment, static_cast<ReadWriteArchiveInterface*>(m_iface));
+    return job;
+}
+
+TestJob* Archive::testArchive()
+{
+    if (!isValid()) {
+        return Q_NULLPTR;
+    }
+
+    qCDebug(ARK) << "Going to test archive";
+
+    TestJob *job = new TestJob(m_iface);
+    return job;
+}
+
+QMimeType Archive::mimeType()
+{
+    if (!isValid()) {
+        return QMimeType();
+    }
+
+    if (!m_mimeType.isValid()) {
+        m_mimeType = determineMimeType(fileName());
+    }
+
+    return m_mimeType;
 }
 
 bool Archive::isReadOnly() const
@@ -274,8 +306,7 @@ ListJob* Archive::list()
 
     qCDebug(ARK) << "Going to list files";
 
-    ListJob *job = new ListJob(m_iface, this);
-    job->setAutoDelete(false);
+    ListJob *job = new ListJob(m_iface);
 
     //if this job has not been listed before, we grab the opportunity to
     //collect some information about the archive
@@ -296,7 +327,7 @@ DeleteJob* Archive::deleteFiles(const QList<QVariant> & files)
     if (m_iface->isReadOnly()) {
         return 0;
     }
-    DeleteJob *newJob = new DeleteJob(files, static_cast<ReadWriteArchiveInterface*>(m_iface), this);
+    DeleteJob *newJob = new DeleteJob(files, static_cast<ReadWriteArchiveInterface*>(m_iface));
 
     return newJob;
 }
@@ -307,9 +338,15 @@ AddJob* Archive::addFiles(const QStringList & files, const CompressionOptions& o
         return Q_NULLPTR;
     }
 
-    qCDebug(ARK) << "Going to add files" << files << "with options" << options;
+    CompressionOptions newOptions = options;
+    if (encryptionType() != Unencrypted) {
+        newOptions[QStringLiteral("PasswordProtectedHint")] = true;
+    }
+
+    qCDebug(ARK) << "Going to add files" << files << "with options" << newOptions;
     Q_ASSERT(!m_iface->isReadOnly());
-    AddJob *newJob = new AddJob(files, options, static_cast<ReadWriteArchiveInterface*>(m_iface), this);
+
+    AddJob *newJob = new AddJob(files, newOptions, static_cast<ReadWriteArchiveInterface*>(m_iface));
     connect(newJob, &AddJob::result, this, &Archive::onAddFinished);
     return newJob;
 }
@@ -325,8 +362,38 @@ ExtractJob* Archive::copyFiles(const QList<QVariant>& files, const QString& dest
         newOptions[QStringLiteral( "PasswordProtectedHint" )] = true;
     }
 
-    ExtractJob *newJob = new ExtractJob(files, destinationDir, newOptions, m_iface, this);
+    ExtractJob *newJob = new ExtractJob(files, destinationDir, newOptions, m_iface);
     return newJob;
+}
+
+PreviewJob *Archive::preview(const QString &file)
+{
+    if (!isValid()) {
+        return Q_NULLPTR;
+    }
+
+    PreviewJob *job = new PreviewJob(file, (encryptionType() != Unencrypted), m_iface);
+    return job;
+}
+
+OpenJob *Archive::open(const QString &file)
+{
+    if (!isValid()) {
+        return Q_NULLPTR;
+    }
+
+    OpenJob *job = new OpenJob(file, (encryptionType() != Unencrypted), m_iface);
+    return job;
+}
+
+OpenWithJob *Archive::openWith(const QString &file)
+{
+    if (!isValid()) {
+        return Q_NULLPTR;
+    }
+
+    OpenWithJob *job = new OpenWithJob(file, (encryptionType() != Unencrypted), m_iface);
+    return job;
 }
 
 void Archive::encrypt(const QString &password, bool encryptHeader)

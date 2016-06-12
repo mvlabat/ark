@@ -24,6 +24,7 @@
 #include "part.h"
 #include "ark_debug.h"
 #include "adddialog.h"
+#include "archiveformat.h"
 #include "archivemodel.h"
 #include "archiveview.h"
 #include "arkviewer.h"
@@ -37,6 +38,7 @@
 #include "kerfuffle/settings.h"
 #include "kerfuffle/previewsettingspage.h"
 #include "kerfuffle/propertiesdialog.h"
+#include "pluginmanager.h"
 
 #include <KAboutData>
 #include <KActionCollection>
@@ -115,6 +117,20 @@ Part::Part(QWidget *parentWidget, QObject *parent, const QVariantList& args)
     vbox->addWidget(m_commentView);
     m_commentBox->setLayout(vbox);
 
+    m_commentMsgWidget = new KMessageWidget();
+    m_commentMsgWidget->setText(i18n("Comment has been modified."));
+    m_commentMsgWidget->setMessageType(KMessageWidget::Information);
+    m_commentMsgWidget->setCloseButtonVisible(false);
+    m_commentMsgWidget->hide();
+
+    QAction *saveAction = new QAction(i18n("Save"), m_commentMsgWidget);
+    m_commentMsgWidget->addAction(saveAction);
+    connect(saveAction, &QAction::triggered, this, &Part::slotAddComment);
+
+    m_commentBox->layout()->addWidget(m_commentMsgWidget);
+
+    connect(m_commentView, &QPlainTextEdit::textChanged, this, &Part::slotCommentChanged);
+
     setWidget(mainWidget);
     mainWidget->setLayout(m_vlayout);
 
@@ -178,6 +194,15 @@ Part::~Part()
 
     m_extractArchiveAction->menu()->deleteLater();
     m_extractAction->menu()->deleteLater();
+}
+
+void Part::slotCommentChanged()
+{
+    if (m_commentMsgWidget->isHidden() && m_commentView->toPlainText() != m_model->archive()->comment()) {
+        m_commentMsgWidget->animatedShow();
+    } else if (m_commentMsgWidget->isVisible() && m_commentView->toPlainText() == m_model->archive()->comment()) {
+        m_commentMsgWidget->hide();
+    }
 }
 
 KAboutData *Part::createAboutData()
@@ -360,6 +385,19 @@ void Part::setupActions()
     connect(m_propertiesAction, &QAction::triggered,
             this, &Part::slotShowProperties);
 
+    m_editCommentAction = actionCollection()->addAction(QStringLiteral("edit_comment"));
+    m_editCommentAction->setIcon(QIcon::fromTheme(QStringLiteral("document-edit")));
+    actionCollection()->setDefaultShortcut(m_editCommentAction, Qt::ALT + Qt::Key_C);
+    m_editCommentAction->setToolTip(i18nc("@info:tooltip", "Click to add or edit comment"));
+    connect(m_editCommentAction, &QAction::triggered, this, &Part::slotShowComment);
+
+    m_testArchiveAction = actionCollection()->addAction(QStringLiteral("test_archive"));
+    m_testArchiveAction->setIcon(QIcon::fromTheme(QStringLiteral("checkmark")));
+    m_testArchiveAction->setText(i18nc("@action:inmenu", "&Test Integrity"));
+    actionCollection()->setDefaultShortcut(m_testArchiveAction, Qt::ALT + Qt::Key_T);
+    m_testArchiveAction->setToolTip(i18nc("@info:tooltip", "Click to test the archive for integrity"));
+    connect(m_testArchiveAction, &QAction::triggered, this, &Part::slotTestArchive);
+
     connect(m_signalMapper, SIGNAL(mapped(int)), this, SLOT(slotOpenEntry(int)));
 
     updateActions();
@@ -406,6 +444,74 @@ void Part::updateActions()
                                      (selectedEntriesCount == 1));
     m_propertiesAction->setEnabled(!isBusy() &&
                                    m_model->archive());
+
+    m_commentView->setEnabled(!isBusy());
+    m_commentMsgWidget->setEnabled(!isBusy());
+
+    m_editCommentAction->setEnabled(false);
+    m_testArchiveAction->setEnabled(false);
+
+    if (m_model->archive()) {
+        const KPluginMetaData metadata = PluginManager().preferredPluginFor(m_model->archive()->mimeType())->metaData();
+        bool supportsWriteComment = ArchiveFormat::fromMetadata(m_model->archive()->mimeType(), metadata).supportsWriteComment();
+        m_editCommentAction->setEnabled(!isBusy() &&
+                                        supportsWriteComment);
+        m_commentView->setReadOnly(!supportsWriteComment);
+        m_editCommentAction->setText(m_model->archive()->hasComment() ? i18nc("@action:inmenu mutually exclusive with Add &Comment", "Edit &Comment") :
+                                                                        i18nc("@action:inmenu mutually exclusive with Edit &Comment", "Add &Comment"));
+
+        bool supportsTesting = ArchiveFormat::fromMetadata(m_model->archive()->mimeType(), metadata).supportsTesting();
+        m_testArchiveAction->setEnabled(!isBusy() &&
+                                        supportsTesting);
+    } else {
+        m_commentView->setReadOnly(true);
+        m_editCommentAction->setText(i18nc("@action:inmenu mutually exclusive with Edit &Comment", "Add &Comment"));
+    }
+}
+
+void Part::slotShowComment()
+{
+    if (!m_commentBox->isVisible()) {
+        m_commentBox->show();
+        m_commentSplitter->setSizes(QList<int>() << m_view->height() * 0.6 << 1);
+    }
+    m_commentView->setFocus();
+}
+
+void Part::slotAddComment()
+{
+    CommentJob *job = m_model->archive()->addComment(m_commentView->toPlainText());
+    if (!job) {
+        return;
+    }
+    registerJob(job);
+    job->start();
+    m_commentMsgWidget->hide();
+    if (m_commentView->toPlainText().isEmpty()) {
+        m_commentBox->hide();
+    }
+}
+
+void Part::slotTestArchive()
+{
+    TestJob *job = m_model->archive()->testArchive();
+    if (!job) {
+        return;
+    }
+    registerJob(job);
+    connect(job, &KJob::result, this, &Part::slotTestingDone);
+    job->start();
+}
+
+void Part::slotTestingDone(KJob* job)
+{
+    if (job->error() && job->error() != KJob::KilledJobError) {
+        KMessageBox::error(widget(), job->errorString());
+    } else if (static_cast<TestJob*>(job)->testSucceeded()) {
+        KMessageBox::information(widget(), i18n("The archive passed the integrity test."), i18n("Test Results"));
+    } else {
+        KMessageBox::error(widget(), i18n("The archive failed the integrity test."), i18n("Test Results"));
+    }
 }
 
 void Part::updateQuickExtractMenu(QAction *extractAction)
@@ -507,7 +613,8 @@ bool Part::openFile()
         return false;
     }
 
-    QScopedPointer<Kerfuffle::Archive> archive(Kerfuffle::Archive::create(localFilePath(), m_model));
+    const QString fixedMimeType = arguments().metaData()[QStringLiteral("fixedMimeType")];
+    QScopedPointer<Kerfuffle::Archive> archive(Kerfuffle::Archive::create(localFilePath(), fixedMimeType, m_model));
     Q_ASSERT(archive);
 
     if (archive->error() == NoPlugin) {
@@ -676,8 +783,7 @@ void Part::slotLoadingFinished(KJob *job)
 
     if (!m_model->archive()->comment().isEmpty()) {
         m_commentView->setPlainText(m_model->archive()->comment());
-        m_commentBox->show();
-        m_commentSplitter->setSizes(QList<int>() << m_view->height() * 0.6 << 1);
+        slotShowComment();
     } else {
         m_commentView->clear();
         m_commentBox->hide();
@@ -751,37 +857,36 @@ void Part::slotOpenEntry(int mode)
 
     // Extract the entry.
     if (!entry.isEmpty()) {
-        Kerfuffle::ExtractionOptions options;
-        options[QStringLiteral("PreservePaths")] = true;
 
-        m_tmpOpenDirList.append(new QTemporaryDir);
         m_openFileMode = static_cast<OpenFileMode>(mode);
-        ExtractJob *job = m_model->extractFile(entry[InternalID], m_tmpOpenDirList.last()->path(), options);
+        KJob *job = Q_NULLPTR;
+
+        if (m_openFileMode == Preview) {
+            job = m_model->preview(entry[InternalID].toString());
+            connect(job, &KJob::result, this, &Part::slotPreviewExtractedEntry);
+        } else {
+            const QString file = entry[InternalID].toString();
+            job = (m_openFileMode == OpenFile) ? m_model->open(file) : m_model->openWith(file);
+            connect(job, &KJob::result, this, &Part::slotOpenExtractedEntry);
+        }
 
         registerJob(job);
-        connect(job, &KJob::result,
-                this, &Part::slotOpenExtractedEntry);
         job->start();
     }
 }
 
 void Part::slotOpenExtractedEntry(KJob *job)
 {
-    // FIXME: the error checking here isn't really working
-    //        if there's an error or an overwrite dialog,
-    //        the preview dialog will be launched anyway
     if (!job->error()) {
-        const ArchiveEntry& entry =
-            m_model->entryForIndex(m_view->selectionModel()->currentIndex());
 
-        ExtractJob *extractJob = qobject_cast<ExtractJob*>(job);
-        Q_ASSERT(extractJob);
-        QString fullName = extractJob->destinationDirectory() + QLatin1Char('/') + entry[FileName].toString();
+        OpenJob *openJob = qobject_cast<OpenJob*>(job);
+        Q_ASSERT(openJob);
 
-        // Make sure a maliciously crafted archive with parent folders named ".." do
-        // not cause the previewed file path to be located outside the temporary
-        // directory, resulting in a directory traversal issue.
-        fullName.remove(QStringLiteral("../"));
+        // Since the user could modify the file (unlike the Preview case),
+        // we'll need to manually delete the temp dir in the Part destructor.
+        m_tmpOpenDirList << openJob->tempDir();
+
+        const QString fullName = openJob->validatedFilePath();
 
         bool isWritable = m_model->archive() && !m_model->archive()->isReadOnly();
 
@@ -791,39 +896,33 @@ void Part::slotOpenExtractedEntry(KJob *job)
             QFile::setPermissions(fullName, QFileDevice::ReadOwner | QFileDevice::ReadGroup | QFileDevice::ReadOther);
         }
 
-        // TODO: get rid of m_openFileMode by extending ExtractJob with a
-        // Preview/OpenJob. This would prevent race conditions if we ever stop
-        // disabling the whole UI while extracting a file to preview it.
-        if (m_openFileMode != Preview && isWritable) {
+        if (isWritable) {
             m_fileWatcher = new QFileSystemWatcher;
             connect(m_fileWatcher, &QFileSystemWatcher::fileChanged, this, &Part::slotWatchedFileModified);
-        }
-
-        QMimeDatabase db;
-        switch (m_openFileMode) {
-
-        case Preview:
-            ArkViewer::view(fullName);
-            break;
-        case OpenFile:
-            KRun::runUrl(QUrl::fromUserInput(fullName,
-                                             QString(),
-                                             QUrl::AssumeLocalFile),
-                         db.mimeTypeForFile(fullName).name(),
-                         widget());
-            break;
-        case OpenFileWith:
-            QList<QUrl> list;
-            list.append(QUrl::fromUserInput(fullName,
-                                            QString(),
-                                            QUrl::AssumeLocalFile));
-            KRun::displayOpenWithDialog(list, widget(), true);
-
-            break;
-        }
-        if (m_openFileMode != Preview && isWritable) {
             m_fileWatcher->addPath(fullName);
         }
+
+        if (qobject_cast<OpenWithJob*>(job)) {
+            const QList<QUrl> urls = {QUrl::fromUserInput(fullName, QString(), QUrl::AssumeLocalFile)};
+            KRun::displayOpenWithDialog(urls, widget());
+        } else {
+            KRun::runUrl(QUrl::fromUserInput(fullName, QString(), QUrl::AssumeLocalFile),
+                         QMimeDatabase().mimeTypeForFile(fullName).name(),
+                         widget());
+        }
+    } else if (job->error() != KJob::KilledJobError) {
+        KMessageBox::error(widget(), job->errorString());
+    }
+    setReadyGui();
+}
+
+void Part::slotPreviewExtractedEntry(KJob *job)
+{
+    if (!job->error()) {
+        PreviewJob *previewJob = qobject_cast<PreviewJob*>(job);
+        Q_ASSERT(previewJob);
+
+        ArkViewer::view(previewJob->validatedFilePath());
 
     } else if (job->error() != KJob::KilledJobError) {
         KMessageBox::error(widget(), job->errorString());

@@ -96,6 +96,7 @@ private slots:
     void slotLoadingStarted();
     void slotLoadingFinished(KJob *job);
     void slotOpenExtractedEntry(KJob*);
+    void slotPreviewExtractedEntry(KJob* job);
     void slotOpenEntry(int mode);
     void slotError(const QString& errorMessage, const QString& details);
     void slotExtractArchive();
@@ -106,6 +107,7 @@ private slots:
     void slotAddFiles(const QStringList& files, const QString& path = QString());
     void slotAddDir();
     void slotAddFilesDone(KJob*);
+    void slotTestingDone(KJob*);
     void slotDeleteFiles();
     void slotDeleteFilesDone(KJob*);
     void slotShowProperties();
@@ -121,6 +123,10 @@ private slots:
     void setReadyGui();
     void setFileNameFromArchive();
     void slotWatchedFileModified(const QString& file);
+    void slotShowComment();
+    void slotAddComment();
+    void slotCommentChanged();
+    void slotTestArchive();
 
 signals:
     void busy();
@@ -150,6 +156,8 @@ private:
     QAction *m_deleteFilesAction;
     QAction *m_saveAsAction;
     QAction *m_propertiesAction;
+    QAction *m_editCommentAction;
+    QAction *m_testArchiveAction;
     KToggleAction *m_showInfoPanelAction;
     InfoPanel            *m_infoPanel;
     QSplitter            *m_splitter;
@@ -165,6 +173,7 @@ private:
     QSplitter *m_commentSplitter;
     QGroupBox *m_commentBox;
     QPlainTextEdit *m_commentView;
+    KMessageWidget *m_commentMsgWidget;
 };
 
 } // namespace Ark

@@ -70,8 +70,8 @@ void Job::Private::run()
 #endif
 }
 
-Job::Job(ReadOnlyArchiveInterface *interface, QObject *parent)
-    : KJob(parent)
+Job::Job(ReadOnlyArchiveInterface *interface)
+    : KJob()
     , m_archiveInterface(interface)
     , m_isRunning(false)
     , d(new Private(this))
@@ -109,7 +109,7 @@ void Job::start()
     jobTimer.start();
     m_isRunning = true;
 
-    if (archiveInterface()->isCliBased()) {
+    if (archiveInterface()->waitForFinishedSignal()) {
         // CLI-based interfaces run a QProcess, no need to use threads.
         QTimer::singleShot(0, this, &Job::doWork);
     } else {
@@ -192,8 +192,8 @@ bool Job::doKill()
     return ret;
 }
 
-ListJob::ListJob(ReadOnlyArchiveInterface *interface, QObject *parent)
-    : Job(interface, parent)
+ListJob::ListJob(ReadOnlyArchiveInterface *interface)
+    : Job(interface)
     , m_isSingleFolderArchive(true)
     , m_isPasswordProtected(false)
     , m_extractedFilesSize(0)
@@ -271,8 +271,8 @@ QString ListJob::subfolderName() const
     return m_subfolderName;
 }
 
-ExtractJob::ExtractJob(const QVariantList& files, const QString& destinationDir, const ExtractionOptions& options, ReadOnlyArchiveInterface *interface, QObject *parent)
-    : Job(interface, parent)
+ExtractJob::ExtractJob(const QVariantList& files, const QString& destinationDir, const ExtractionOptions& options, ReadOnlyArchiveInterface *interface)
+    : Job(interface)
     , m_files(files)
     , m_destinationDir(destinationDir)
     , m_options(options)
@@ -336,8 +336,90 @@ ExtractionOptions ExtractJob::extractionOptions() const
     return m_options;
 }
 
-AddJob::AddJob(const QStringList& files, const CompressionOptions& options , ReadWriteArchiveInterface *interface, QObject *parent)
-    : Job(interface, parent)
+TempExtractJob::TempExtractJob(const QString &file, bool passwordProtectedHint, ReadOnlyArchiveInterface *interface)
+    : Job(interface)
+    , m_file(file)
+    , m_passwordProtectedHint(passwordProtectedHint)
+{
+}
+
+
+QString TempExtractJob::validatedFilePath() const
+{
+    QString path = extractionDir() + QLatin1Char('/') + m_file;
+
+    // Make sure a maliciously crafted archive with parent folders named ".." do
+    // not cause the previewed file path to be located outside the temporary
+    // directory, resulting in a directory traversal issue.
+    path.remove(QStringLiteral("../"));
+
+    return path;
+}
+
+ExtractionOptions TempExtractJob::extractionOptions() const
+{
+    ExtractionOptions options;
+    options[QStringLiteral("PreservePaths")] = true;
+
+    if (m_passwordProtectedHint) {
+        options[QStringLiteral("PasswordProtectedHint")] = true;
+    }
+
+    return options;
+}
+
+void TempExtractJob::doWork()
+{
+    emit description(this, i18n("Extracting one file"));
+
+    connectToArchiveInterfaceSignals();
+
+    qCDebug(ARK) << "Extracting:" << m_file;
+
+    bool ret = archiveInterface()->copyFiles({ QVariant::fromValue(fileRootNodePair(m_file)) }, extractionDir(), extractionOptions());
+
+    if (!archiveInterface()->waitForFinishedSignal()) {
+        onFinished(ret);
+    }
+}
+
+PreviewJob::PreviewJob(const QString& file, bool passwordProtectedHint, ReadOnlyArchiveInterface *interface)
+    : TempExtractJob(file, passwordProtectedHint, interface)
+{
+    qCDebug(ARK) << "PreviewJob started";
+}
+
+QString PreviewJob::extractionDir() const
+{
+    return m_tmpExtractDir.path();
+}
+
+OpenJob::OpenJob(const QString& file, bool passwordProtectedHint, ReadOnlyArchiveInterface *interface)
+    : TempExtractJob(file, passwordProtectedHint, interface)
+{
+    qCDebug(ARK) << "OpenJob started";
+
+    m_tmpExtractDir = new QTemporaryDir();
+}
+
+QTemporaryDir *OpenJob::tempDir() const
+{
+    return m_tmpExtractDir;
+}
+
+QString OpenJob::extractionDir() const
+{
+    return m_tmpExtractDir->path();
+}
+
+OpenWithJob::OpenWithJob(const QString& file, bool passwordProtectedHint, ReadOnlyArchiveInterface *interface)
+    : OpenJob(file, passwordProtectedHint, interface)
+{
+    qCDebug(ARK) << "OpenWithJob started";
+}
+
+AddJob::AddJob(const QStringList& files, const CompressionOptions& options , ReadWriteArchiveInterface *interface)
+    : Job(interface)
     , m_files(files)
     , m_options(options)
 {
@@ -394,8 +476,8 @@ void AddJob::onFinished(bool result)
     Job::onFinished(result);
 }
 
-DeleteJob::DeleteJob(const QVariantList& files, ReadWriteArchiveInterface *interface, QObject *parent)
-    : Job(interface, parent)
+DeleteJob::DeleteJob(const QVariantList& files, ReadWriteArchiveInterface *interface)
+    : Job(interface)
     , m_files(files)
 {
 }
@@ -415,6 +497,60 @@ void DeleteJob::doWork()
     if (!archiveInterface()->waitForFinishedSignal()) {
         onFinished(ret);
     }
+}
+
+CommentJob::CommentJob(const QString& comment, ReadWriteArchiveInterface *interface)
+    : Job(interface)
+    , m_comment(comment)
+{
+}
+
+void CommentJob::doWork()
+{
+    emit description(this, i18n("Adding comment"));
+
+    ReadWriteArchiveInterface *m_writeInterface =
+        qobject_cast<ReadWriteArchiveInterface*>(archiveInterface());
+
+    Q_ASSERT(m_writeInterface);
+
+    connectToArchiveInterfaceSignals();
+    bool ret = m_writeInterface->addComment(m_comment);
+
+    if (!archiveInterface()->waitForFinishedSignal()) {
+        onFinished(ret);
+    }
+}
+
+TestJob::TestJob(ReadOnlyArchiveInterface *interface)
+    : Job(interface)
+{
+    m_testSuccess = false;
+}
+
+void TestJob::doWork()
+{
+    qCDebug(ARK) << "TestJob started";
+
+    emit description(this, i18n("Testing archive"));
+    connectToArchiveInterfaceSignals();
+    connect(archiveInterface(), &ReadOnlyArchiveInterface::testSuccess, this, &TestJob::onTestSuccess);
+
+    bool ret = archiveInterface()->testArchive();
+
+    if (!archiveInterface()->waitForFinishedSignal()) {
+        onFinished(ret);
+    }
+}
+
+void TestJob::onTestSuccess()
+{
+    m_testSuccess = true;
+}
+
+bool TestJob::testSucceeded()
+{
+    return m_testSuccess;
 }
 
 } // namespace Kerfuffle

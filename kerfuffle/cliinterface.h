@@ -38,6 +38,8 @@ class KProcess;
 class KPtyProcess;
 
 class QDir;
+class QTemporaryDir;
+class QTemporaryFile;
 
 namespace Kerfuffle
 {
@@ -98,9 +100,6 @@ enum CliInterfaceParameters {
      * $Archive - the path of the archive
      * $Files - the files selected to be extracted, if any
      * $PreservePathSwitch - the flag for extracting with full paths
-     * $RootNodeSwitch - the internal work dir in the archive (for example
-     * when the user has dragged a folder from the archive and wants it
-     * extracted relative to it)
      * $PasswordSwitch - the switch setting the password. Note that this
      * will not be inserted unless the listing function has emitted an
      * entry with the IsPasswordProtected property set to true.
@@ -128,14 +127,6 @@ enum CliInterfaceParameters {
      * stringlist ("--extractFull", "")
      */
     PreservePathSwitch,
-    /**
-     * QStringList (default empty)
-     * The format of the root node switch. The variable $Path will be
-     * substituted for the path string.
-     * Example: ("--internalPath=$Path)
-     * or ("--path", "$Path")
-     */
-    RootNodeSwitch,
     /**
      * QStringList (default empty)
      * The format of the root node switch. The variable $Password will be
@@ -254,6 +245,25 @@ enum CliInterfaceParameters {
      * Example (rar plugin): ("-hp$Password")
      */
     PasswordHeaderSwitch,
+
+    ///////////////[ COMMENT ]/////////////
+
+    /**
+     * QStringList
+     * The arguments that are passed to AddProgram when adding
+     * a comment.
+     */
+    CommentArgs,
+    /**
+     * QString
+     * The variable $CommentFile will be substituted for the file
+     * containing the comment.
+     * Example (rar plugin): -z$CommentFile
+     */
+    CommentSwitch,
+    TestProgram,
+    TestArgs,
+    TestPassedPattern
 };
 
 typedef QHash<int, QVariant> ParameterList;
@@ -264,7 +274,7 @@ class KERFUFFLE_EXPORT CliInterface : public ReadWriteArchiveInterface
 
 public:
     enum OperationMode  {
-        List, Copy, Add, Delete
+        List, Copy, Add, Delete, Comment, Test
     };
     OperationMode m_operationMode;
 
@@ -275,6 +285,8 @@ public:
     virtual bool copyFiles(const QList<QVariant>& files, const QString& destinationDirectory, const ExtractionOptions& options) Q_DECL_OVERRIDE;
     virtual bool addFiles(const QStringList & files, const CompressionOptions& options) Q_DECL_OVERRIDE;
     virtual bool deleteFiles(const QList<QVariant> & files) Q_DECL_OVERRIDE;
+    virtual bool addComment(const QString &comment) Q_DECL_OVERRIDE;
+    virtual bool testArchive() Q_DECL_OVERRIDE;
 
     virtual void resetParsing() = 0;
     virtual ParameterList parameterList() const = 0;
@@ -282,24 +294,6 @@ public:
     bool doKill() Q_DECL_OVERRIDE;
     bool doSuspend() Q_DECL_OVERRIDE;
     bool doResume() Q_DECL_OVERRIDE;
-    bool isCliBased() const Q_DECL_OVERRIDE;
-
-    /**
-     * Returns the list of characters which are preceded by a
-     * backslash when a file name in an archive is passed to
-     * a program.
-     *
-     * @see setEscapedCharacters().
-     */
-    QString escapedCharacters(); // FIXME not implemented?
-
-    /**
-     * Sets which characters will be preceded by a backslash when
-     * a file name in an archive is passed to a program.
-     *
-     * @see escapedCharacters().
-     */
-    void setEscapedCharacters(const QString& characters); // FIXME not implemented?
 
     /**
      * Sets if the listing should include empty lines.
@@ -315,8 +309,11 @@ public:
     bool moveToDestination(const QDir &tempDir, const QDir &destDir, bool preservePaths);
 
     QStringList substituteListVariables(const QStringList &listArgs, const QString &password);
-    QStringList substituteCopyVariables(const QStringList &extractArgs, const QVariantList &files, bool preservePaths, const QString &password, const QString &rootNode);
+    QStringList substituteCopyVariables(const QStringList &extractArgs, const QVariantList &files, bool preservePaths, const QString &password);
     QStringList substituteAddVariables(const QStringList &addArgs, const QStringList &files, const QString &password, bool encryptHeader, int compLevel);
+    QStringList substituteDeleteVariables(const QStringList &deleteArgs, const QVariantList &files, const QString &password);
+    QStringList substituteCommentVariables(const QStringList &commentArgs, const QString &commentFile);
+    QStringList substituteTestVariables(const QStringList &testArgs);
 
     /**
      * @return The preserve path switch, according to the @p preservePaths extraction option.
@@ -339,11 +336,6 @@ public:
     QString compressionLevelSwitch(int level) const;
 
     /**
-     * @return The root node switch with the given @p rootNode.
-     */
-    QStringList rootNodeSwitch(const QString& rootNode) const;
-
-    /**
      * @return The list of selected files to extract.
      */
     QStringList copyFilesList(const QVariantList& files) const;
@@ -355,17 +347,19 @@ protected:
 
     /**
      * Run @p programName with the given @p arguments.
-     * The method waits until @p programName is finished to exit.
      *
      * @param programName The program that will be run (not the whole path).
      * @param arguments A list of arguments that will be passed to the program.
      *
-     * @return @c true if the program was found and the process ran correctly,
-     *         @c false otherwise.
+     * @return @c true if the program was found and the process was started correctly,
+     *         @c false otherwise (in which case finished(false) is emitted).
      */
     bool runProcess(const QStringList& programNames, const QStringList& arguments);
 
-    void failOperation();
+    /**
+     * Kill the running process. The finished signal is emitted according to @p emitFinished.
+     */
+    void killProcess(bool emitFinished = true);
 
     /**
      * Ask the password *before* running any process.
@@ -397,6 +391,7 @@ private:
 
     bool handleFileExistsMessage(const QString& filename);
     bool checkForErrorMessage(const QString& line, int parameterIndex);
+    bool checkForTestSuccessMessage(const QString& line);
 
     /**
      * Performs any additional escaping and processing on @p fileName
@@ -421,6 +416,8 @@ private:
      */
     bool isEmptyDir(const QDir &dir);
 
+    void copyProcessCleanup();
+
     QByteArray m_stdOutData;
     QRegularExpression m_passwordPromptPattern;
     QHash<int, QList<QRegularExpression> > m_patternCache;
@@ -436,8 +433,17 @@ private:
     bool m_abortingOperation;
     QString m_storedFileName;
 
+    CompressionOptions m_compressionOptions;
+    QString m_oldWorkingDir;
+    QString m_extractDestDir;
+    QTemporaryDir *m_extractTempDir;
+    QTemporaryFile *m_commentTempFile;
+    QVariantList m_copiedFiles;
+
 private slots:
     void processFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    void copyProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
+
 };
 }
 

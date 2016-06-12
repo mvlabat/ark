@@ -37,12 +37,16 @@ ArchiveFormat::ArchiveFormat(const QMimeType& mimeType,
                              Archive::EncryptionType encryptionType,
                              int minCompLevel,
                              int maxCompLevel,
-                             int defaultCompLevel) :
+                             int defaultCompLevel,
+                             bool supportsWriteComment,
+                             bool supportsTesting) :
     m_mimeType(mimeType),
     m_encryptionType(encryptionType),
     m_minCompressionLevel(minCompLevel),
     m_maxCompressionLevel(maxCompLevel),
-    m_defaultCompressionLevel(defaultCompLevel)
+    m_defaultCompressionLevel(defaultCompLevel),
+    m_supportsWriteComment(supportsWriteComment),
+    m_supportsTesting(supportsTesting)
 {
 }
 
@@ -60,6 +64,9 @@ ArchiveFormat ArchiveFormat::fromMetadata(const QMimeType& mimeType, const KPlug
         int maxCompLevel = formatProps[QStringLiteral("CompressionLevelMax")].toInt();
         int defaultCompLevel = formatProps[QStringLiteral("CompressionLevelDefault")].toInt();
 
+        bool supportsWriteComment = formatProps[QStringLiteral("SupportsWriteComment")].toBool();
+        bool supportsTesting = formatProps[QStringLiteral("SupportsTesting")].toBool();
+
         Archive::EncryptionType encType = Archive::Unencrypted;
         if (formatProps[QStringLiteral("HeaderEncryption")].toBool()) {
             encType = Archive::HeaderEncrypted;
@@ -67,7 +74,7 @@ ArchiveFormat ArchiveFormat::fromMetadata(const QMimeType& mimeType, const KPlug
             encType = Archive::Encrypted;
         }
 
-        return ArchiveFormat(mimeType, encType, minCompLevel, maxCompLevel, defaultCompLevel);
+        return ArchiveFormat(mimeType, encType, minCompLevel, maxCompLevel, defaultCompLevel, supportsWriteComment, supportsTesting);
     }
 
     return ArchiveFormat();
@@ -96,6 +103,16 @@ int ArchiveFormat::maxCompressionLevel() const
 int ArchiveFormat::defaultCompressionLevel() const
 {
     return m_defaultCompressionLevel;
+}
+
+bool ArchiveFormat::supportsWriteComment() const
+{
+    return m_supportsWriteComment;
+}
+
+bool ArchiveFormat::supportsTesting() const
+{
+    return m_supportsTesting;
 }
 
 }

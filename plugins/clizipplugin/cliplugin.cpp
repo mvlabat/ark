@@ -49,6 +49,7 @@ CliPlugin::~CliPlugin()
 void CliPlugin::resetParsing()
 {
     m_parseState = ParseStateHeader;
+    m_tempComment.clear();
     m_comment.clear();
 }
 
@@ -82,7 +83,7 @@ ParameterList CliPlugin::parameterList() const
     if (p.isEmpty()) {
         p[CaptureProgress] = false;
         p[ListProgram] = QStringList() << QStringLiteral("zipinfo");
-        p[ExtractProgram] = QStringList() << QStringLiteral("unzip");
+        p[ExtractProgram] = p[TestProgram] = QStringList() << QStringLiteral("unzip");
         p[DeleteProgram] = p[AddProgram] = QStringList() << QStringLiteral("zip");
 
         p[ListArgs] = QStringList() << QStringLiteral("-l")
@@ -121,6 +122,9 @@ ParameterList CliPlugin::parameterList() const
         p[CorruptArchivePatterns] = QStringList() << QStringLiteral("End-of-central-directory signature not found");
         p[DiskFullPatterns] = QStringList() << QStringLiteral("write error \\(disk full\\?\\)")
                                             << QStringLiteral("No space left on device");
+        p[TestArgs] = QStringList() << QStringLiteral("-t")
+                                    << QStringLiteral("$Archive");
+        p[TestPassedPattern] = QStringLiteral("^No errors detected in compressed data of ");
     }
     return p;
 }
@@ -146,13 +150,13 @@ bool CliPlugin::readListLine(const QString &line)
     case ParseStateComment:
         if (commentEndPattern.match(line).hasMatch()) {
             m_parseState = ParseStateEntry;
-            if (!m_comment.trimmed().isEmpty()) {
-                m_comment = m_comment.trimmed();
+            if (!m_tempComment.trimmed().isEmpty()) {
+                m_comment = m_tempComment.trimmed();
                 m_linesComment = m_comment.count(QLatin1Char('\n')) + 1;
                 qCDebug(ARK) << "Found a comment with" << m_linesComment << "lines";
             }
         } else {
-            m_comment.append(line + QLatin1Char('\n'));
+            m_tempComment.append(line + QLatin1Char('\n'));
         }
     case ParseStateEntry:
         QRegularExpressionMatch rxMatch = entryPattern.match(line);

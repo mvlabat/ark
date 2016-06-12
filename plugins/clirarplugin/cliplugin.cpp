@@ -78,7 +78,7 @@ ParameterList CliPlugin::parameterList() const
 
     if (p.isEmpty()) {
         p[CaptureProgress] = true;
-        p[ListProgram] = p[ExtractProgram] = QStringList() << QStringLiteral( "unrar" );
+        p[ListProgram] = p[ExtractProgram] = p[TestProgram] = QStringList() << QStringLiteral( "unrar" );
         p[DeleteProgram] = p[AddProgram] = QStringList() << QStringLiteral( "rar" );
 
         p[ListArgs] = QStringList() << QStringLiteral("vt")
@@ -89,16 +89,15 @@ ParameterList CliPlugin::parameterList() const
                                        << QStringLiteral( "-p-" )
                                        << QStringLiteral( "$PreservePathSwitch" )
                                        << QStringLiteral( "$PasswordSwitch" )
-                                       << QStringLiteral( "$RootNodeSwitch" )
                                        << QStringLiteral( "$Archive" )
                                        << QStringLiteral( "$Files" );
         p[PreservePathSwitch] = QStringList() << QStringLiteral( "x" )
                                               << QStringLiteral( "e" );
-        p[RootNodeSwitch] = QStringList() << QStringLiteral( "-ap$Path" );
         p[PasswordSwitch] = QStringList() << QStringLiteral( "-p$Password" );
         p[PasswordHeaderSwitch] = QStringList() << QStringLiteral("-hp$Password");
         p[CompressionLevelSwitch] = QStringLiteral("-m$CompressionLevel");
         p[DeleteArgs] = QStringList() << QStringLiteral( "d" )
+                                      << QStringLiteral( "$PasswordSwitch" )
                                       << QStringLiteral( "$Archive" )
                                       << QStringLiteral( "$Files" );
         p[FileExistsExpression] = QStringList()
@@ -122,6 +121,13 @@ ParameterList CliPlugin::parameterList() const
         p[CorruptArchivePatterns] = QStringList() << QStringLiteral("Unexpected end of archive")
                                                   << QStringLiteral("the file header is corrupt");
         p[DiskFullPatterns] = QStringList() << QStringLiteral("No space left on device");
+        p[CommentArgs] = QStringList() << QStringLiteral("c")
+                                       << QStringLiteral("$CommentSwitch")
+                                       << QStringLiteral("$Archive");
+        p[CommentSwitch] = QStringLiteral("-z$CommentFile");
+        p[TestArgs] = QStringList() << QStringLiteral("t")
+                                    << QStringLiteral("$Archive");
+        p[TestPassedPattern] = QStringLiteral("^All OK$");
     }
 
     return p;

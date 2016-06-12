@@ -43,10 +43,10 @@
 LibarchivePlugin::LibarchivePlugin(QObject *parent, const QVariantList & args)
     : ReadWriteArchiveInterface(parent, args)
     , m_archiveReadDisk(archive_read_disk_new())
+    , m_abortOperation(false)
     , m_cachedArchiveEntryCount(0)
     , m_emitNoEntries(false)
     , m_extractedFilesSize(0)
-    , m_abortOperation(false)
 {
     qCDebug(ARK) << "Initializing libarchive plugin";
     archive_read_disk_set_standard_lookup(m_archiveReadDisk.data());
@@ -85,7 +85,7 @@ bool LibarchivePlugin::list()
     m_extractedFilesSize = 0;
 
     struct archive_entry *aentry;
-    int result;
+    int result = ARCHIVE_RETRY;
 
     bool firstEntry = true;
     while (!m_abortOperation && (result = archive_read_next_header(arch_reader.data(), &aentry)) == ARCHIVE_OK) {
@@ -129,6 +129,17 @@ bool LibarchivePlugin::deleteFiles(const QList<QVariant> &files)
     return false;
 }
 
+bool LibarchivePlugin::addComment(const QString& comment)
+{
+    Q_UNUSED(comment)
+    return false;
+}
+
+bool LibarchivePlugin::testArchive()
+{
+    return false;
+}
+
 bool LibarchivePlugin::doKill()
 {
     m_abortOperation = true;
@@ -143,12 +154,6 @@ bool LibarchivePlugin::copyFiles(const QVariantList& files, const QString& desti
     const bool extractAll = files.isEmpty();
     const bool preservePaths = options.value(QStringLiteral( "PreservePaths" )).toBool();
     bool removeRootNode = options.value(QStringLiteral("RemoveRootNode"), QVariant()).toBool();
-
-    // See if there is a singular RootNode.
-    QString rootNodeSingular = options.value(QStringLiteral("RootNode"), QVariant()).toString();
-    if (!rootNodeSingular.isEmpty() && !rootNodeSingular.endsWith(QLatin1Char('/'))) {
-        rootNodeSingular.append(QLatin1Char('/'));
-    }
 
     // To avoid traversing the entire archive when extracting a limited set of
     // entries, we maintain a list of remaining entries and stop when it's
@@ -223,7 +228,7 @@ bool LibarchivePlugin::copyFiles(const QVariantList& files, const QString& desti
         }
 
         fileBeingRenamed.clear();
-        int index;
+        int index = -1;
 
         // Retry with renamed entry, fire an overwrite query again
         // if the new entry also exists.
@@ -286,17 +291,6 @@ bool LibarchivePlugin::copyFiles(const QVariantList& files, const QString& desti
                 //qCDebug(ARK) << "Removing" << files.at(index).value<fileRootNodePair>().rootNode << "from" << entryName;
 
                 const QString truncatedFilename(entryName.remove(0, files.at(index).value<fileRootNodePair>().rootNode.size()));
-                archive_entry_copy_pathname(entry, QFile::encodeName(truncatedFilename).constData());
-                entryFI = QFileInfo(truncatedFilename);
-
-            // OR, if a singular rootNode is provided, remove it from file path.
-            } else if (removeRootNode &&
-                       entryName != fileBeingRenamed &&
-                       !rootNodeSingular.isEmpty()) {
-
-                //qCDebug(ARK) << "Removing" << rootNodeSingular << "from" << entryName;
-
-                const QString truncatedFilename(entryName.remove(0, rootNodeSingular.size()));
                 archive_entry_copy_pathname(entry, QFile::encodeName(truncatedFilename).constData());
                 entryFI = QFileInfo(truncatedFilename);
             }

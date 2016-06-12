@@ -74,7 +74,6 @@ void InfoPanel::updateWithDefaults()
 
     additionalInfo->setText(QString());
     hideMetaData();
-    hideActions();
 }
 
 QString InfoPanel::prettyFileName() const
@@ -130,8 +129,7 @@ void InfoPanel::setIndex(const QModelIndex& index)
         const QString name = (nameParts.count() > 0) ? nameParts.last() : entry[ FileName ].toString();
         fileName->setText(name);
 
-        metadataLabel->setText(metadataTextFor(index));
-        showMetaData();
+        showMetaDataFor(index);
     }
 }
 
@@ -156,32 +154,21 @@ void InfoPanel::setIndexes(const QModelIndexList &list)
 
 void InfoPanel::showMetaData()
 {
-    firstSeparator->show();
-    metadataLabel->show();
+    m_separator->show();
+    m_metaDataWidget->show();
 }
 
 void InfoPanel::hideMetaData()
 {
-    firstSeparator->hide();
-    metadataLabel->hide();
+    m_separator->hide();
+    m_metaDataWidget->hide();
 }
 
-void InfoPanel::showActions()
+void InfoPanel::showMetaDataFor(const QModelIndex &index)
 {
-    secondSeparator->show();
-    actionsLabel->show();
-}
+    showMetaData();
 
-void InfoPanel::hideActions()
-{
-    secondSeparator->hide();
-    actionsLabel->hide();
-}
-
-QString InfoPanel::metadataTextFor(const QModelIndex &index)
-{
     const ArchiveEntry& entry = m_model->entryForIndex(index);
-    QString text;
 
     QMimeDatabase db;
     QMimeType mimeType;
@@ -192,23 +179,33 @@ QString InfoPanel::metadataTextFor(const QModelIndex &index)
         mimeType = db.mimeTypeForFile(entry[FileName].toString(), QMimeDatabase::MatchExtension);
     }
 
-    text += i18n("<b>Type:</b> %1<br/>",  mimeType.comment());
+    m_typeLabel->setText(i18n("<b>Type:</b> %1",  mimeType.comment()));
 
     if (entry.contains(Owner)) {
-        text += i18n("<b>Owner:</b> %1<br/>", entry[ Owner ].toString());
+        m_ownerLabel->show();
+        m_ownerLabel->setText(i18n("<b>Owner:</b> %1", entry[Owner].toString()));
+    } else {
+        m_ownerLabel->hide();
     }
 
     if (entry.contains(Group)) {
-        text += i18n("<b>Group:</b> %1<br/>", entry[ Group ].toString());
+        m_groupLabel->show();
+        m_groupLabel->setText(i18n("<b>Group:</b> %1", entry[Group].toString()));
+    } else {
+        m_groupLabel->hide();
     }
 
     if (entry.contains(Link)) {
-        text += i18n("<b>Target:</b> %1<br/>", entry[ Link ].toString());
+        m_targetLabel->show();
+        m_targetLabel->setText(i18n("<b>Target:</b> %1", entry[Link].toString()));
+    } else {
+        m_targetLabel->hide();
     }
 
     if (entry.contains(IsPasswordProtected) && entry[ IsPasswordProtected ].toBool()) {
-        text += i18n("<b>Password protected:</b> Yes<br/>");
+        m_passwordLabel->show();
+        m_passwordLabel->setText(i18n("<b>Password protected:</b> Yes"));
+    } else {
+        m_passwordLabel->hide();
     }
-
-    return text;
 }
