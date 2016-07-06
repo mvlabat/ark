@@ -362,13 +362,6 @@ void Part::setupActions()
     connect(m_addFilesAction, SIGNAL(triggered(bool)),
             this, SLOT(slotAddFiles()));
 
-    m_addDirAction = actionCollection()->addAction(QStringLiteral("add-dir"));
-    m_addDirAction->setIcon(QIcon::fromTheme(QStringLiteral("archive-insert-directory")));
-    m_addDirAction->setText(i18n("Add Fo&lder..."));
-    m_addDirAction->setToolTip(i18nc("@info:tooltip", "Click to add a folder to the archive"));
-    connect(m_addDirAction, &QAction::triggered,
-            this, &Part::slotAddDir);
-
     m_deleteFilesAction = actionCollection()->addAction(QStringLiteral("delete"));
     m_deleteFilesAction->setIcon(QIcon::fromTheme(QStringLiteral("archive-remove")));
     m_deleteFilesAction->setText(i18n("De&lete"));
@@ -430,8 +423,6 @@ void Part::updateActions()
                                m_model->rowCount() > 0);
     m_addFilesAction->setEnabled(!isBusy() &&
                                  isWritable);
-    m_addDirAction->setEnabled(!isBusy() &&
-                               isWritable);
     m_deleteFilesAction->setEnabled(!isBusy() &&
                                     isWritable &&
                                     (selectedEntriesCount > 0));
@@ -1255,15 +1246,6 @@ void Part::slotAddFiles()
         slotAddFiles(dlg->selectedFiles(), QString());
     }
     delete dlg;
-}
-
-void Part::slotAddDir()
-{
-    const QString dirToAdd = QFileDialog::getExistingDirectory(widget(), i18nc("@title:window", "Add Folder"));
-
-    if (!dirToAdd.isEmpty()) {
-        slotAddFiles(QStringList() << dirToAdd);
-    }
 }
 
 void Part::slotAddFilesDone(KJob* job)
