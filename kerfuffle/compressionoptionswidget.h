@@ -58,10 +58,10 @@ public:
     void setMimeType(const QMimeType &mimeType);
 
 private:
-    QMimeType m_mimetype;
+    void updateWidgets();
 
-private slots:
-    void slotUpdateWidgets();
+    QMimeType m_mimetype;
+    CompressionOptions m_opts;
 };
 }
 

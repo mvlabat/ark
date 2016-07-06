@@ -42,6 +42,7 @@ CompressionOptionsWidget::CompressionOptionsWidget(const QMimeType &mimeType,
                                                    QWidget *parent)
     : QWidget(parent)
     , m_mimetype(mimeType)
+    , m_opts(opts)
 {
     setupUi(this);
 
@@ -49,17 +50,7 @@ CompressionOptionsWidget::CompressionOptionsWidget(const QMimeType &mimeType,
     pwdWidget->setBackgroundWarningColor(colorScheme.background(KColorScheme::NegativeBackground).color());
     pwdWidget->setPasswordStrengthMeterVisible(false);
 
-    const KPluginMetaData metadata = PluginManager().preferredPluginFor(m_mimetype)->metaData();
-    const ArchiveFormat archiveFormat = ArchiveFormat::fromMetadata(m_mimetype, metadata);
-    Q_ASSERT(archiveFormat.isValid());
-
-    if (opts.contains(QStringLiteral("CompressionLevel"))) {
-        compLevelSlider->setValue(opts.value(QStringLiteral("CompressionLevel")).toInt());
-    } else {
-        compLevelSlider->setValue(archiveFormat.defaultCompressionLevel());
-    }
-
-    slotUpdateWidgets();
+    updateWidgets();
 }
 
 CompressionOptions CompressionOptionsWidget::commpressionOptions() const
@@ -85,7 +76,7 @@ QString CompressionOptionsWidget::password() const
     return pwdWidget->password();
 }
 
-void CompressionOptionsWidget::slotUpdateWidgets()
+void CompressionOptionsWidget::updateWidgets()
 {
     const KPluginMetaData metadata = PluginManager().preferredPluginFor(m_mimetype)->metaData();
     const ArchiveFormat archiveFormat = ArchiveFormat::fromMetadata(m_mimetype, metadata);
@@ -128,14 +119,18 @@ void CompressionOptionsWidget::slotUpdateWidgets()
         collapsibleCompression->setEnabled(true);
         compLevelSlider->setMinimum(archiveFormat.minCompressionLevel());
         compLevelSlider->setMaximum(archiveFormat.maxCompressionLevel());
-        compLevelSlider->setValue(archiveFormat.defaultCompressionLevel());
+        if (m_opts.contains(QStringLiteral("CompressionLevel"))) {
+            compLevelSlider->setValue(m_opts.value(QStringLiteral("CompressionLevel")).toInt());
+        } else {
+            compLevelSlider->setValue(archiveFormat.defaultCompressionLevel());
+        }
     }
 }
 
 void CompressionOptionsWidget::setMimeType(const QMimeType &mimeType)
 {
     m_mimetype = mimeType;
-    slotUpdateWidgets();
+    updateWidgets();
 }
 
 bool CompressionOptionsWidget::isEncryptionAvailable() const
