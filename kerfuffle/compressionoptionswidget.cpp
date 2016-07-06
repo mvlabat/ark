@@ -45,32 +45,13 @@ CompressionOptionsWidget::CompressionOptionsWidget(const QMimeType &mimeType,
 {
     setupUi(this);
 
-    qCDebug(ARK) << "opts:" << opts;
-
     KColorScheme colorScheme(QPalette::Active, KColorScheme::View);
     pwdWidget->setBackgroundWarningColor(colorScheme.background(KColorScheme::NegativeBackground).color());
     pwdWidget->setPasswordStrengthMeterVisible(false);
 
-    const KPluginMetaData metadata = PluginManager().preferredPluginFor(mimeType)->metaData();
-    const ArchiveFormat archiveFormat = ArchiveFormat::fromMetadata(mimeType, metadata);
+    const KPluginMetaData metadata = PluginManager().preferredPluginFor(m_mimetype)->metaData();
+    const ArchiveFormat archiveFormat = ArchiveFormat::fromMetadata(m_mimetype, metadata);
     Q_ASSERT(archiveFormat.isValid());
-
-    if (archiveFormat.encryptionType() != Archive::Unencrypted) {
-        collapsibleEncryption->setEnabled(true);
-        collapsibleEncryption->setToolTip(QString());
-    } else {
-        collapsibleEncryption->setEnabled(false);
-        collapsibleEncryption->setToolTip(i18n("Protection of the archive with password is not possible with the %1 format.",
-                                               mimeType.comment()));
-    }
-
-    if (archiveFormat.maxCompressionLevel() == 0) {
-        collapsibleCompression->setEnabled(false);
-    } else {
-        collapsibleCompression->setEnabled(true);
-        compLevelSlider->setMinimum(archiveFormat.minCompressionLevel());
-        compLevelSlider->setMaximum(archiveFormat.maxCompressionLevel());
-    }
 
     if (opts.contains(QStringLiteral("CompressionLevel"))) {
         compLevelSlider->setValue(opts.value(QStringLiteral("CompressionLevel")).toInt());
@@ -78,9 +59,7 @@ CompressionOptionsWidget::CompressionOptionsWidget(const QMimeType &mimeType,
         compLevelSlider->setValue(archiveFormat.defaultCompressionLevel());
     }
 
-    connect(collapsibleEncryption, &KCollapsibleGroupBox::expandedChanged, this, &CompressionOptionsWidget::slotEncryptionToggled);
-
-    slotEncryptionToggled();
+    slotUpdateWidgets();
 }
 
 CompressionOptions CompressionOptionsWidget::commpressionOptions() const
@@ -106,28 +85,82 @@ QString CompressionOptionsWidget::password() const
     return pwdWidget->password();
 }
 
-void CompressionOptionsWidget::slotEncryptionToggled()
+void CompressionOptionsWidget::slotUpdateWidgets()
 {
     const KPluginMetaData metadata = PluginManager().preferredPluginFor(m_mimetype)->metaData();
     const ArchiveFormat archiveFormat = ArchiveFormat::fromMetadata(m_mimetype, metadata);
     Q_ASSERT(archiveFormat.isValid());
 
-    const bool isExpanded = collapsibleEncryption->isExpanded();
-    if (isExpanded && (archiveFormat.encryptionType() == Archive::HeaderEncrypted)) {
-        encryptHeaderCheckBox->setEnabled(true);
-        encryptHeaderCheckBox->setToolTip(QString());
-    } else {
-        encryptHeaderCheckBox->setEnabled(false);
-        // Show the tooltip only if the encryption is still enabled.
-        // This is needed because if the new filter is e.g. tar, the whole encryption group gets disabled.
-        if (collapsibleEncryption->isEnabled() && collapsibleEncryption->isExpanded()) {
-            encryptHeaderCheckBox->setToolTip(i18n("Protection of the list of files is not possible with the %1 format.",
-                                                   m_mimetype.comment()));
-        } else {
+    if (archiveFormat.encryptionType() != Archive::Unencrypted) {
+        collapsibleEncryption->setEnabled(true);
+        collapsibleEncryption->setToolTip(QString());
+        pwdWidget->setEnabled(true);
+
+        if (archiveFormat.encryptionType() == Archive::HeaderEncrypted) {
+            encryptHeaderCheckBox->setEnabled(true);
             encryptHeaderCheckBox->setToolTip(QString());
+        } else {
+            encryptHeaderCheckBox->setEnabled(false);
+            // Show the tooltip only if the encryption is still enabled.
+            // This is needed because if the new filter is e.g. tar, the whole encryption group gets disabled.
+            if (collapsibleEncryption->isEnabled() && collapsibleEncryption->isExpanded()) {
+                encryptHeaderCheckBox->setToolTip(i18n("Protection of the list of files is not possible with the %1 format.",
+                                                       m_mimetype.comment()));
+            } else {
+                encryptHeaderCheckBox->setToolTip(QString());
+            }
         }
+
+    } else {
+        collapsibleEncryption->setEnabled(false);
+        collapsibleEncryption->setToolTip(i18n("Protection of the archive with password is not possible with the %1 format.",
+                                               m_mimetype.comment()));
+        pwdWidget->setEnabled(false);
+        encryptHeaderCheckBox->setToolTip(QString());
     }
-    pwdWidget->setEnabled(isExpanded);
+
+
+    if (archiveFormat.maxCompressionLevel() == 0) {
+        collapsibleCompression->setEnabled(false);
+        collapsibleCompression->setToolTip(i18n("It is not possible to set compression level for the %1 format.",
+                                               m_mimetype.comment()));
+    } else {
+        collapsibleCompression->setEnabled(true);
+        compLevelSlider->setMinimum(archiveFormat.minCompressionLevel());
+        compLevelSlider->setMaximum(archiveFormat.maxCompressionLevel());
+        compLevelSlider->setValue(archiveFormat.defaultCompressionLevel());
+    }
+}
+
+void CompressionOptionsWidget::setMimeType(const QMimeType &mimeType)
+{
+    m_mimetype = mimeType;
+    slotUpdateWidgets();
+}
+
+bool CompressionOptionsWidget::isEncryptionAvailable() const
+{
+    return collapsibleEncryption->isEnabled();
+}
+
+bool CompressionOptionsWidget::isEncryptionEnabled() const
+{
+    return isEncryptionAvailable() && collapsibleEncryption->isExpanded();
+}
+
+bool CompressionOptionsWidget::isHeaderEncryptionAvailable() const
+{
+    return isEncryptionEnabled() && encryptHeaderCheckBox->isEnabled();
+}
+
+bool CompressionOptionsWidget::isHeaderEncryptionEnabled() const
+{
+    return isHeaderEncryptionAvailable() && encryptHeaderCheckBox->isChecked();
+}
+
+KNewPasswordWidget::PasswordStatus CompressionOptionsWidget::passwordStatus() const
+{
+    return pwdWidget->passwordStatus();
 }
 
 }

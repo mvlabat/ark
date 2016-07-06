@@ -45,16 +45,23 @@ public:
     explicit CompressionOptionsWidget(const QMimeType &mimeType,
                                       const CompressionOptions &opts = QHash<QString, QVariant>(),
                                       QWidget *parent = 0);
-    void setEncryptionVisible(bool visible);
     int compressionLevel() const;
     QString password() const;
     CompressionOptions commpressionOptions() const;
+    bool isEncryptionAvailable() const;
+    bool isEncryptionEnabled() const;
+    bool isHeaderEncryptionAvailable() const;
+    bool isHeaderEncryptionEnabled() const;
+    KNewPasswordWidget::PasswordStatus passwordStatus() const;
+
+    void setEncryptionVisible(bool visible);
+    void setMimeType(const QMimeType &mimeType);
 
 private:
     QMimeType m_mimetype;
 
 private slots:
-    void slotEncryptionToggled();
+    void slotUpdateWidgets();
 };
 }
 
