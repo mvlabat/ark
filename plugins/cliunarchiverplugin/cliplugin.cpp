@@ -21,8 +21,6 @@
  */
 
 #include "cliplugin.h"
-#include "ark_debug.h"
-#include "kerfuffle/kerfuffle_export.h"
 
 #include <QJsonArray>
 #include <QJsonParseError>
@@ -78,7 +76,7 @@ bool CliPlugin::list()
     return true;
 }
 
-bool CliPlugin::copyFiles(const QList<QVariant> &files, const QString &destinationDirectory, const ExtractionOptions &options)
+bool CliPlugin::copyFiles(const QList<Archive::Entry*> &files, const QString &destinationDirectory, const ExtractionOptions &options)
 {
     ExtractionOptions newOptions = options;
 
@@ -187,29 +185,28 @@ void CliPlugin::readJsonOutput()
     const QJsonArray entries = json.value(QStringLiteral("lsarContents")).toArray();
 
     foreach (const QJsonValue& value, entries) {
-        const QJsonObject currentEntry = value.toObject();
+        const QJsonObject currentEntryJson = value.toObject();
 
-        m_currentEntry.clear();
+        Archive::Entry *currentEntry = new Archive::Entry(this);
 
-        QString filename = currentEntry.value(QStringLiteral("XADFileName")).toString();
+        QString filename = currentEntryJson.value(QStringLiteral("XADFileName")).toString();
 
-        m_currentEntry[IsDirectory] = !currentEntry.value(QStringLiteral("XADIsDirectory")).isUndefined();
-        if (m_currentEntry[IsDirectory].toBool()) {
+        currentEntry->setProperty("isDirectory", !currentEntryJson.value(QStringLiteral("XADIsDirectory")).isUndefined());
+        if (currentEntry->isDir()) {
             filename += QLatin1Char('/');
         }
 
-        m_currentEntry[FileName] = filename;
-        m_currentEntry[InternalID] = filename;
+        currentEntry->setProperty("fullPath", filename);
 
         // FIXME: archives created from OSX (i.e. with the __MACOSX folder) list each entry twice, the 2nd time with size 0
-        m_currentEntry[Size] = currentEntry.value(QStringLiteral("XADFileSize"));
-        m_currentEntry[CompressedSize] = currentEntry.value(QStringLiteral("XADCompressedSize"));
-        m_currentEntry[Timestamp] = currentEntry.value(QStringLiteral("XADLastModificationDate")).toVariant();
-        m_currentEntry[Size] = currentEntry.value(QStringLiteral("XADFileSize"));
-        m_currentEntry[IsPasswordProtected] = (currentEntry.value(QStringLiteral("XADIsEncrypted")).toInt() == 1);
+        currentEntry->setProperty("size", currentEntryJson.value(QStringLiteral("XADFileSize")));
+        currentEntry->setProperty("compressedSize", currentEntryJson.value(QStringLiteral("XADCompressedSize")));
+        currentEntry->setProperty("timestamp", currentEntryJson.value(QStringLiteral("XADLastModificationDate")).toVariant());
+        currentEntry->setProperty("size", currentEntryJson.value(QStringLiteral("XADFileSize")));
+        currentEntry->setProperty("isPasswordProtected", (currentEntryJson.value(QStringLiteral("XADIsEncrypted")).toInt() == 1));
         // TODO: missing fields
 
-        emit entry(m_currentEntry);
+        emit entry(currentEntry);
     }
 }
 

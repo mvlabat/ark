@@ -25,6 +25,7 @@
  */
 
 #include "clirartest.h"
+#include "kerfuffle/archiveentry.h"
 
 #include <QFile>
 #include <QSignalSpy>
@@ -39,8 +40,6 @@ using namespace Kerfuffle;
 
 void CliRarTest::initTestCase()
 {
-    qRegisterMetaType<ArchiveEntry>();
-
     m_plugin = new Plugin(this);
     foreach (Plugin *plugin, m_pluginManger.availablePlugins()) {
         if (plugin->metaData().pluginId() == QStringLiteral("kerfuffle_clirar")) {
@@ -170,8 +169,9 @@ void CliRarTest::testList_data()
 
 void CliRarTest::testList()
 {
+    qRegisterMetaType<Archive::Entry*>("Archive::Entry*");
     CliPlugin *rarPlugin = new CliPlugin(this, {QStringLiteral("dummy.rar")});
-    QSignalSpy signalSpy(rarPlugin, SIGNAL(entry(ArchiveEntry)));
+    QSignalSpy signalSpy(rarPlugin, &CliPlugin::entry);
 
     QFETCH(QString, outputTextFile);
     QFETCH(int, expectedEntriesCount);
@@ -189,28 +189,28 @@ void CliRarTest::testList()
 
     QFETCH(int, someEntryIndex);
     QVERIFY(someEntryIndex < signalSpy.count());
-    ArchiveEntry entry = qvariant_cast<ArchiveEntry>(signalSpy.at(someEntryIndex).at(0));
+    Archive::Entry *entry = signalSpy.at(someEntryIndex).at(0).value<Archive::Entry*>();
 
     QFETCH(QString, expectedName);
-    QCOMPARE(entry[FileName].toString(), expectedName);
+    QCOMPARE(entry->property("fullPath").toString(), expectedName);
 
     QFETCH(bool, isDirectory);
-    QCOMPARE(entry[IsDirectory].toBool(), isDirectory);
+    QCOMPARE(entry->isDir(), isDirectory);
 
     QFETCH(bool, isPasswordProtected);
-    QCOMPARE(entry[IsPasswordProtected].toBool(), isPasswordProtected);
+    QCOMPARE(entry->property("isPasswordProtected").toBool(), isPasswordProtected);
 
     QFETCH(QString, symlinkTarget);
-    QCOMPARE(entry[Link].toString(), symlinkTarget);
+    QCOMPARE(entry->property("link").toString(), symlinkTarget);
 
     QFETCH(qulonglong, expectedSize);
-    QCOMPARE(entry[Size].toULongLong(), expectedSize);
+    QCOMPARE(entry->property("size").toULongLong(), expectedSize);
 
     QFETCH(qulonglong, expectedCompressedSize);
-    QCOMPARE(entry[CompressedSize].toULongLong(), expectedCompressedSize);
+    QCOMPARE(entry->property("compressedSize").toULongLong(), expectedCompressedSize);
 
     QFETCH(QString, expectedTimestamp);
-    QCOMPARE(entry[Timestamp].toString(), expectedTimestamp);
+    QCOMPARE(entry->property("timestamp").toString(), expectedTimestamp);
 
     rarPlugin->deleteLater();
 }
@@ -326,16 +326,16 @@ void CliRarTest::testAddArgs()
 void CliRarTest::testExtractArgs_data()
 {
     QTest::addColumn<QString>("archiveName");
-    QTest::addColumn<QVariantList>("files");
+    QTest::addColumn<QList<Archive::Entry*>>("files");
     QTest::addColumn<bool>("preservePaths");
     QTest::addColumn<QString>("password");
     QTest::addColumn<QStringList>("expectedArgs");
 
     QTest::newRow("preserve paths, encrypted")
             << QStringLiteral("/tmp/foo.rar")
-            << QVariantList {
-                   QVariant::fromValue(fileRootNodePair(QStringLiteral("aDir/b.txt"), QStringLiteral("aDir"))),
-                   QVariant::fromValue(fileRootNodePair(QStringLiteral("c.txt"), QString()))
+            << QList<Archive::Entry*> {
+                   new Archive::Entry(this, QStringLiteral("aDir/b.txt"), QStringLiteral("aDir")),
+                   new Archive::Entry(this, QStringLiteral("c.txt"), QString())
                }
             << true << QStringLiteral("1234")
             << QStringList {
@@ -350,9 +350,9 @@ void CliRarTest::testExtractArgs_data()
 
     QTest::newRow("preserve paths, unencrypted")
             << QStringLiteral("/tmp/foo.rar")
-            << QVariantList {
-                   QVariant::fromValue(fileRootNodePair(QStringLiteral("aDir/b.txt"), QStringLiteral("aDir"))),
-                   QVariant::fromValue(fileRootNodePair(QStringLiteral("c.txt"), QString()))
+            << QList<Archive::Entry*> {
+                   new Archive::Entry(this, QStringLiteral("aDir/b.txt"), QStringLiteral("aDir")),
+                   new Archive::Entry(this, QStringLiteral("c.txt"), QString())
                }
             << true << QString()
             << QStringList {
@@ -366,9 +366,9 @@ void CliRarTest::testExtractArgs_data()
 
     QTest::newRow("without paths, encrypted")
             << QStringLiteral("/tmp/foo.rar")
-            << QVariantList {
-                   QVariant::fromValue(fileRootNodePair(QStringLiteral("aDir/b.txt"), QStringLiteral("aDir"))),
-                   QVariant::fromValue(fileRootNodePair(QStringLiteral("c.txt"), QString()))
+            << QList<Archive::Entry*> {
+                   new Archive::Entry(this, QStringLiteral("aDir/b.txt"), QStringLiteral("aDir")),
+                   new Archive::Entry(this, QStringLiteral("c.txt"), QString())
                }
             << false << QStringLiteral("1234")
             << QStringList {
@@ -383,9 +383,9 @@ void CliRarTest::testExtractArgs_data()
 
     QTest::newRow("without paths, unencrypted")
             << QStringLiteral("/tmp/foo.rar")
-            << QVariantList {
-                   QVariant::fromValue(fileRootNodePair(QStringLiteral("aDir/b.txt"), QStringLiteral("aDir"))),
-                   QVariant::fromValue(fileRootNodePair(QStringLiteral("c.txt"), QString()))
+            << QList<Archive::Entry*> {
+                   new Archive::Entry(this, QStringLiteral("aDir/b.txt"), QStringLiteral("aDir")),
+                   new Archive::Entry(this, QStringLiteral("c.txt"), QString())
                }
             << false << QString()
             << QStringList {
@@ -411,7 +411,7 @@ void CliRarTest::testExtractArgs()
                                       QStringLiteral("$Archive"),
                                       QStringLiteral("$Files") };
 
-    QFETCH(QVariantList, files);
+    QFETCH(QList<Archive::Entry*>, files);
     QFETCH(bool, preservePaths);
     QFETCH(QString, password);
 

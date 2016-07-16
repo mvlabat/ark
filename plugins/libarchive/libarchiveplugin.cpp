@@ -26,19 +26,11 @@
  */
 
 #include "libarchiveplugin.h"
-#include "ark_debug.h"
-#include "kerfuffle/kerfuffle_export.h"
 #include "kerfuffle/queries.h"
-
-#include <archive_entry.h>
 
 #include <KLocalizedString>
 
-#include <QDateTime>
 #include <QDirIterator>
-#include <QFile>
-#include <QList>
-#include <QSaveFile>
 
 LibarchivePlugin::LibarchivePlugin(QObject *parent, const QVariantList & args)
     : ReadWriteArchiveInterface(parent, args)
@@ -116,14 +108,14 @@ bool LibarchivePlugin::list()
     return archive_read_close(arch_reader.data()) == ARCHIVE_OK;
 }
 
-bool LibarchivePlugin::addFiles(const QStringList &files, const CompressionOptions &options)
+bool LibarchivePlugin::addFiles(const QList<Archive::Entry*> &files, const CompressionOptions &options)
 {
     Q_UNUSED(files)
     Q_UNUSED(options)
     return false;
 }
 
-bool LibarchivePlugin::deleteFiles(const QList<QVariant> &files)
+bool LibarchivePlugin::deleteFiles(const QList<Archive::Entry*> &files)
 {
     Q_UNUSED(files)
     return false;
@@ -146,7 +138,7 @@ bool LibarchivePlugin::doKill()
     return true;
 }
 
-bool LibarchivePlugin::copyFiles(const QVariantList& files, const QString& destinationDirectory, const ExtractionOptions& options)
+bool LibarchivePlugin::copyFiles(const QList<Archive::Entry*>& files, const QString& destinationDirectory, const ExtractionOptions& options)
 {
     qCDebug(ARK) << "Changing current directory to " << destinationDirectory;
     QDir::setCurrent(destinationDirectory);
@@ -158,7 +150,8 @@ bool LibarchivePlugin::copyFiles(const QVariantList& files, const QString& desti
     // To avoid traversing the entire archive when extracting a limited set of
     // entries, we maintain a list of remaining entries and stop when it's
     // empty.
-    QVariantList remainingFiles = files;
+    QStringList fullPaths = entryFullPaths(files);
+    QStringList remainingFiles = entryFullPaths(files);
 
     ArchiveRead arch(archive_read_new());
 
@@ -255,12 +248,12 @@ bool LibarchivePlugin::copyFiles(const QVariantList& files, const QString& desti
 
         // Should the entry be extracted?
         if (extractAll ||
-            remainingFiles.contains(QVariant::fromValue(fileRootNodePair(entryName))) ||
+            remainingFiles.contains(entryName) ||
             entryName == fileBeingRenamed) {
 
             // Find the index of entry.
             if (entryName != fileBeingRenamed) {
-                index = files.indexOf(QVariant::fromValue(fileRootNodePair(entryName)));
+                index = fullPaths.indexOf(entryName);
             }
             if (!extractAll && index == -1) {
                 // If entry is not found in files, skip entry.
@@ -285,14 +278,15 @@ bool LibarchivePlugin::copyFiles(const QVariantList& files, const QString& desti
                 entryFI = QFileInfo(fileWithoutPath);
 
             // OR, if the file has a rootNode attached, remove it from file path.
-            } else if (!extractAll && removeRootNode && entryName != fileBeingRenamed &&
-                       !files.at(index).value<fileRootNodePair>().rootNode.isEmpty()) {
+            } else if (!extractAll && removeRootNode && entryName != fileBeingRenamed) {
+                const QString &rootNode = files.at(index)->rootNode;
+                if (!rootNode.isEmpty()) {
+                    //qCDebug(ARK) << "Removing" << files.at(index).value<fileRootNodePair>().rootNode << "from" << entryName;
 
-                //qCDebug(ARK) << "Removing" << files.at(index).value<fileRootNodePair>().rootNode << "from" << entryName;
-
-                const QString truncatedFilename(entryName.remove(0, files.at(index).value<fileRootNodePair>().rootNode.size()));
-                archive_entry_copy_pathname(entry, QFile::encodeName(truncatedFilename).constData());
-                entryFI = QFileInfo(truncatedFilename);
+                    const QString truncatedFilename(entryName.remove(0, rootNode.size()));
+                    archive_entry_copy_pathname(entry, QFile::encodeName(truncatedFilename).constData());
+                    entryFI = QFileInfo(truncatedFilename);
+                }
             }
 
             // Check if the file about to be written already exists.
@@ -395,7 +389,7 @@ bool LibarchivePlugin::copyFiles(const QVariantList& files, const QString& desti
             archive_entry_clear(entry);
             no_entries++;
 
-            remainingFiles.removeOne(QVariant::fromValue(fileRootNodePair(entryName)));
+            remainingFiles.removeOne(entryName);
 
         } else {
 
@@ -415,33 +409,33 @@ bool LibarchivePlugin::copyFiles(const QVariantList& files, const QString& desti
 
 void LibarchivePlugin::emitEntryFromArchiveEntry(struct archive_entry *aentry)
 {
-    ArchiveEntry e;
+    Archive::Entry *e = new Archive::Entry(Q_NULLPTR);
 
 #ifdef _MSC_VER
-    e[FileName] = QDir::fromNativeSeparators(QString::fromUtf16((ushort*)archive_entry_pathname_w(aentry)));
+    e->setProperty("fullPath", QDir::fromNativeSeparators(QString::fromUtf16((ushort*)archive_entry_pathname_w(aentry))));
 #else
-    e[FileName] = QDir::fromNativeSeparators(QString::fromWCharArray(archive_entry_pathname_w(aentry)));
+    e->setProperty("fullPath", QDir::fromNativeSeparators(QString::fromWCharArray(archive_entry_pathname_w(aentry))));
 #endif
-    e[InternalID] = e[FileName];
 
     const QString owner = QString::fromLatin1(archive_entry_uname(aentry));
     if (!owner.isEmpty()) {
-        e[Owner] = owner;
+        e->setProperty("owner", owner);
     }
 
     const QString group = QString::fromLatin1(archive_entry_gname(aentry));
     if (!group.isEmpty()) {
-        e[Group] = group;
+        e->setProperty("group", group);
     }
 
-    e[Size] = (qlonglong)archive_entry_size(aentry);
-    e[IsDirectory] = S_ISDIR(archive_entry_mode(aentry));
+    e->compressedSizeIsSet = false;
+    e->setProperty("size", (qlonglong)archive_entry_size(aentry));
+    e->setProperty("isDirectory", S_ISDIR(archive_entry_mode(aentry)));
 
     if (archive_entry_symlink(aentry)) {
-        e[Link] = QLatin1String( archive_entry_symlink(aentry) );
+        e->setProperty("link", QLatin1String( archive_entry_symlink(aentry) ));
     }
 
-    e[Timestamp] = QDateTime::fromTime_t(archive_entry_mtime(aentry));
+    e->setProperty("timestamp", QDateTime::fromTime_t(archive_entry_mtime(aentry)));
 
     emit entry(e);
 }
