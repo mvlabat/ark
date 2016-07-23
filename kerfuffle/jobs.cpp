@@ -422,9 +422,10 @@ OpenWithJob::OpenWithJob(Archive::Entry *entry, bool passwordProtectedHint, Read
     qCDebug(ARK) << "OpenWithJob started";
 }
 
-AddJob::AddJob(QList<Archive::Entry*> &entries, const CompressionOptions& options , ReadWriteArchiveInterface *interface)
+AddJob::AddJob(const QList<Archive::Entry*> &entries, const Archive::Entry *destination, const CompressionOptions& options , ReadWriteArchiveInterface *interface)
     : Job(interface)
     , m_entries(entries)
+    , m_destination(destination)
     , m_options(options)
 {
     qCDebug(ARK) << "AddJob started";
@@ -465,7 +466,7 @@ void AddJob::doWork()
     }
 
     connectToArchiveInterfaceSignals();
-    bool ret = m_writeInterface->addFiles(m_entries, m_options);
+    bool ret = m_writeInterface->addFiles(m_entries, m_destination, m_tmpExtractDir.path(), m_options);
 
     if (!archiveInterface()->waitForFinishedSignal()) {
         onFinished(ret);
@@ -481,7 +482,7 @@ void AddJob::onFinished(bool result)
     Job::onFinished(result);
 }
 
-DeleteJob::DeleteJob(QList<Archive::Entry*> &entries, ReadWriteArchiveInterface *interface)
+DeleteJob::DeleteJob(const QList<Archive::Entry*> &entries, ReadWriteArchiveInterface *interface)
     : Job(interface)
     , m_entries(entries)
 {

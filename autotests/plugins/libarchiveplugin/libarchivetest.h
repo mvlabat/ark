@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2007 Henrique Pinto <henrique.pinto@kdemail.net>
- * Copyright (c) 2008-2009 Harald Hvaal <haraldhv@stud.ntnu.no>
+ * Copyright (c) 2016 Elvis Angelaccio <elvis.angelaccio@kdemail.net>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -24,31 +23,28 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef READWRITELIBARCHIVEPLUGIN_H
-#define READWRITELIBARCHIVEPLUGIN_H
+#ifndef LIBARCHIVETEST_H
+#define LIBARCHIVETEST_H
 
-#include "libarchiveplugin.h"
-
-#include <QDir>
-#include <QStringList>
+#include "readwritelibarchiveplugin.h"
+#include "pluginmanager.h"
+#include "autotests/testhelper/testhelper.h"
+#include "kerfuffle/jobs.h"
 
 using namespace Kerfuffle;
 
-class ReadWriteLibarchivePlugin : public LibarchivePlugin
+class LibarchiveTest : public QObject
 {
     Q_OBJECT
 
-public:
-    explicit ReadWriteLibarchivePlugin(QObject *parent, const QVariantList& args);
-    ~ReadWriteLibarchivePlugin();
-
-    bool addFiles(const QList<Archive::Entry*> &files, const Archive::Entry *destination, const QString &tempDirPath, const CompressionOptions& options) Q_DECL_OVERRIDE;
-    bool deleteFiles(const QList<Archive::Entry*>& files) Q_DECL_OVERRIDE;
+private Q_SLOTS:
+    void initTestCase();
+    void testAdd_data();
+    void testAdd();
 
 private:
-    bool writeFile(const QString& relativeName, struct archive* arch);
-
-    QStringList m_writtenFiles;
+    PluginManager m_pluginManger;
+    Plugin *m_plugin;
 };
 
-#endif // READWRITELIBARCHIVEPLUGIN_H
+#endif //LIBARCHIVETEST_H

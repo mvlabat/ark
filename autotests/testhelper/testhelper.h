@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2007 Henrique Pinto <henrique.pinto@kdemail.net>
- * Copyright (c) 2008-2009 Harald Hvaal <haraldhv@stud.ntnu.no>
+ * Copyright (c) 2010-2011 Raphael Kubo da Costa <rakuco@FreeBSD.org>
+ * Copyright (c) 2016 Elvis Angelaccio <elvis.angelaccio@kdemail.net>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -24,31 +24,31 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef READWRITELIBARCHIVEPLUGIN_H
-#define READWRITELIBARCHIVEPLUGIN_H
+#ifndef TESTHELPER_H
+#define TESTHELPER_H
 
-#include "libarchiveplugin.h"
+#include "kerfuffle/jobs.h"
+#include "kerfuffle/archiveentry.h"
 
-#include <QDir>
-#include <QStringList>
+#include <QTest>
+#include <QEventLoop>
 
 using namespace Kerfuffle;
 
-class ReadWriteLibarchivePlugin : public LibarchivePlugin
+class TestHelper
 {
-    Q_OBJECT
-
 public:
-    explicit ReadWriteLibarchivePlugin(QObject *parent, const QVariantList& args);
-    ~ReadWriteLibarchivePlugin();
 
-    bool addFiles(const QList<Archive::Entry*> &files, const Archive::Entry *destination, const QString &tempDirPath, const CompressionOptions& options) Q_DECL_OVERRIDE;
-    bool deleteFiles(const QList<Archive::Entry*>& files) Q_DECL_OVERRIDE;
+    static void startAndWaitForResult(KJob *job);
+    static QList<Archive::Entry*> getEntryList(ReadOnlyArchiveInterface *iface);
+    static QStringList getExpectedEntryPaths(const QList<Archive::Entry*> &entryList, const Archive::Entry* destination);
+    static void verifyEntriesWithDestination(const QList<Archive::Entry*> &oldEntries, const Archive::Entry *destination, const QList<Archive::Entry*> &newEntries);
 
 private:
-    bool writeFile(const QString& relativeName, struct archive* arch);
+    TestHelper() {}
 
-    QStringList m_writtenFiles;
+    static QEventLoop m_eventLoop;
 };
 
-#endif // READWRITELIBARCHIVEPLUGIN_H
+
+#endif //TESTHELPER_H

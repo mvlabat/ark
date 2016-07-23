@@ -164,13 +164,55 @@ bool CliInterface::copyFiles(const QList<Archive::Entry*> &files, const QString 
     return true;
 }
 
-bool CliInterface::addFiles(const QList<Archive::Entry*> &files, const CompressionOptions& options)
+bool CliInterface::addFiles(const QList<Archive::Entry*> &files, const Archive::Entry *destination, const QString &tempDirPath, const CompressionOptions& options)
 {
     cacheParameterList();
 
     m_operationMode = Add;
 
     const QStringList addArgs = m_param.value(AddArgs).toStringList();
+
+    QList<Archive::Entry*> filesToPass = QList<Archive::Entry*>();
+    // If destination path is specified, we have recreate its structure inside the temp directory
+    // and then place symlinks of targeted files there.
+    const QString destinationPath = destination->property("fullPath").toString();
+    if (!destinationPath.isEmpty()) {
+        const QString absoluteDestinationPath = tempDirPath + QLatin1Char('/') + destinationPath;
+
+        QDir qDir;
+        qDir.mkpath(absoluteDestinationPath);
+
+        QObject *preservedParent = Q_NULLPTR;
+        foreach (Archive::Entry *file, files) {
+            // The entries may have parent. We have to save and apply it to our new entry in order to prevent memory
+            // leaks.
+            if (preservedParent == Q_NULLPTR) {
+                preservedParent = file->parent();
+            }
+
+            const QString filePath = QDir::currentPath() + QLatin1Char('/') + file->property("fullPath").toString();
+            QString newFilePath = absoluteDestinationPath + file->property("fullPath").toString();
+            // Symlink function can't accept the second argument as a path with trailing slash.
+            if (newFilePath[newFilePath.count() - 1] == QLatin1Char('/')) {
+                newFilePath.remove(newFilePath.count() - 1, 1);
+            }
+            if (symlink(filePath.toStdString().c_str(), newFilePath.toStdString().c_str()) != 0) {
+                qCDebug(ARK) << "Can't create symlink" << filePath << newFilePath;
+                return false;
+            }
+            else {
+                qCDebug(ARK) << "Symlink's created:" << filePath << newFilePath;
+            }
+        }
+
+        qCDebug(ARK) << "Changing working dir again to " << tempDirPath;
+        QDir::setCurrent(tempDirPath);
+
+        filesToPass.push_back(new Archive::Entry(preservedParent, destinationPath));
+    }
+    else {
+        filesToPass = files;
+    }
 
     if (addArgs.contains(QStringLiteral("$PasswordSwitch")) &&
         options.value(QStringLiteral("PasswordProtectedHint")).toBool() &&
@@ -184,7 +226,7 @@ bool CliInterface::addFiles(const QList<Archive::Entry*> &files, const Compressi
     int compLevel = options.value(QStringLiteral("CompressionLevel"), -1).toInt();
 
     const auto args = substituteAddVariables(m_param.value(AddArgs).toStringList(),
-                                             files,
+                                             filesToPass,
                                              password(),
                                              isHeaderEncryptionEnabled(),
                                              compLevel);
@@ -240,6 +282,7 @@ bool CliInterface::runProcess(const QStringList& programNames, const QStringList
     qCDebug(ARK) << "Executing" << programPath << arguments << "within directory" << QDir::currentPath();
 
 #ifdef Q_OS_WIN
+
     m_process = new KProcess;
 #else
     m_process = new KPtyProcess;

@@ -103,7 +103,7 @@ public:
     /**
      * @return The list of filenames retrieved from the list of entries.
      */
-    QStringList entryFullPaths(const QList<Archive::Entry *> &entries) const;
+    static QStringList entryFullPaths(const QList<Archive::Entry*> &entries);
 
     virtual bool doKill();
     virtual bool doSuspend();
@@ -153,7 +153,7 @@ public:
 
     //see archive.h for a list of what the compressionoptions might
     //contain
-    virtual bool addFiles(const QList<Archive::Entry*> &files, const CompressionOptions& options) = 0;
+    virtual bool addFiles(const QList<Archive::Entry*> &files, const Archive::Entry *destination, const QString &tempDirPath, const CompressionOptions& options) = 0;
     virtual bool deleteFiles(const QList<Archive::Entry*> &files) = 0;
     virtual bool addComment(const QString &comment) = 0;
 };
