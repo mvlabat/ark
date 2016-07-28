@@ -76,7 +76,9 @@ bool CliPlugin::list()
     return true;
 }
 
-bool CliPlugin::copyFiles(const QList<Archive::Entry*> &files, const QString &destinationDirectory, const ExtractionOptions &options)
+bool CliPlugin::copyFiles(const QList<Archive::Entry *> &files,
+                          const QString &destinationDirectory,
+                          const ExtractionOptions &options)
 {
     ExtractionOptions newOptions = options;
 
